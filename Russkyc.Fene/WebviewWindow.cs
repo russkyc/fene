@@ -14,10 +14,11 @@ namespace Russkyc.Fene;
 /// <summary>
 /// Represents a native window hosting a WebView2 control.
 /// </summary>
-public class WebViewWindow(string title = "WebView Window", int width = 600, int height = 500)
+public class WebViewWindow(string title = "WebView Window", int width = 600, int height = 500, int? minWidth = null, int? minHeight = null)
 {
     public const uint WmSynchronizationcontextWorkAvailable = PInvoke.WM_USER + 1;
-    public const uint WmProcessWorkQueue = PInvoke.WM_USER + 2; // NEW: Added message constant
+    public const uint WmProcessWorkQueue = PInvoke.WM_USER + 2;
+    private const uint WmGetMinMaxInfo = 0x0024; // Native Win32 constant for window sizing constraints
     
     private static readonly HWND HWND_TOPMOST = new(-1);
     private static readonly HWND HWND_NOTOPMOST = new(-2);
@@ -28,6 +29,24 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     private CoreWebView2Controller? _controller;
     private UiThreadSynchronizationContext? _uiThreadSyncCtx;
     private readonly ConcurrentQueue<Action> _workQueue = new();
+
+    // Internal Win32 Structs mapped specifically to avoid CsWin32 generation requirements
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WIN32_POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public WIN32_POINT ptReserved;
+        public WIN32_POINT ptMaxSize;
+        public WIN32_POINT ptMaxPosition;
+        public WIN32_POINT ptMinTrackSize;
+        public WIN32_POINT ptMaxTrackSize;
+    }
 
     private struct HostMapping
     {
@@ -44,6 +63,9 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     public string? UserDataFolder { get; set; } = null;
     public bool ShowOnlyAfterLoad { get; set; } = false;
     public bool IsBorderless { get; set; } = false;
+
+    public int? MinWidth { get; set; } = minWidth;
+    public int? MinHeight { get; set; } = minHeight;
     
     /// <summary>
     /// Gets or sets the custom User-Agent string for this window.
@@ -157,7 +179,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         return tcs.Task;
     }
 
-    // NEW: Centralized queue method that wakes the message pump
+    // Centralized queue method that wakes the message pump
     private void EnqueueWork(Action action)
     {
         _workQueue.Enqueue(action);
@@ -175,7 +197,6 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     {
         var tcs = new TaskCompletionSource<List<Cookie>>();
 
-        // UPDATED: Now uses EnqueueWork to prevent starvation delays
         EnqueueWork(async () =>
         {
             try
@@ -284,7 +305,6 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
 
         var style = IsBorderless ? WINDOW_STYLE.WS_POPUP : WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
         
-        // Extract the handle from the owner object, defaulting to Zero if null
         IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
 
         fixed (char* windowNamePtr = title)
@@ -299,7 +319,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 startY, 
                 width, 
                 height, 
-                new HWND(ownerHandle), // Asserts OS-level ownership
+                new HWND(ownerHandle), 
                 default, 
                 hInstance, 
                 null);
@@ -425,7 +445,20 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     {
         switch (msg)
         {
-            case WmProcessWorkQueue: // NEW: Explicitly process queue only when told to
+            case WmGetMinMaxInfo:
+                if (MinWidth.HasValue || MinHeight.HasValue)
+                {
+                    unsafe
+                    {
+                        var mmi = (MINMAXINFO*)lParam.Value;
+                        if (MinWidth.HasValue) mmi->ptMinTrackSize.X = MinWidth.Value;
+                        if (MinHeight.HasValue) mmi->ptMinTrackSize.Y = MinHeight.Value;
+                    }
+                    return default;
+                }
+                break;
+
+            case WmProcessWorkQueue:
                 while (_workQueue.TryDequeue(out var action))
                 {
                     action();

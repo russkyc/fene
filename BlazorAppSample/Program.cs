@@ -24,7 +24,7 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-var mainWindow = new WebViewWindow("Blazor App Sample", 1200, 800)
+var mainWindow = new WebViewWindow("Blazor App Sample", 1200, 800, 1200, 800)
 {
     EnableDarkMode = true,
     BackgroundColor = Color.FromArgb(255, 30, 30, 30),
