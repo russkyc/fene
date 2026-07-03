@@ -1,4 +1,6 @@
 ﻿using System.Collections.Concurrent;
+using Windows.Win32;
+using Windows.Win32.Foundation;
 
 namespace Russkyc.Fene;
 
@@ -62,26 +64,48 @@ public class WindowManager
     /// <summary>
     /// Spawns a window and awaits its total closure, useful for the Dialog/Modal pattern.
     /// </summary>
-    public Task ShowDialogAsync(string path, WebViewWindow window, bool external = false)
+    /// <summary>
+    /// Spawns a window and awaits its total closure, useful for the Dialog/Modal pattern.
+    /// Optionally accepts an owner window to create a true, blocking Win32 modal.
+    /// </summary>
+    public Task ShowDialogAsync(string path, WebViewWindow window, bool external = false, WebViewWindow? owner = null)
     {
         var tcs = new TaskCompletionSource();
         var windowId = Guid.NewGuid();
 
         _activeWindows.TryAdd(windowId, window);
 
+        IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
+
+        // Block input to the parent window to enforce modality
+        if (ownerHandle != IntPtr.Zero)
+        {
+            PInvoke.EnableWindow(new HWND(ownerHandle), false);
+        }
+
         window.Closed += () =>
         {
+            // Re-enable and focus the parent window when the dialog dies
+            if (ownerHandle != IntPtr.Zero)
+            {
+                PInvoke.EnableWindow(new HWND(ownerHandle), true);
+                PInvoke.SetForegroundWindow(new HWND(ownerHandle));
+            }
+
             _activeWindows.TryRemove(windowId, out _);
             tcs.TrySetResult();
         };
 
         var uiThread = new Thread(() =>
         {
-            var targetUrl = external ? path : (path.StartsWith("http://") || path.StartsWith("https://")
+            var targetUrl = external
                 ? path
-                : $"{_baseUrl}/{path.TrimStart('/')}");
+                : (path.StartsWith("http://") || path.StartsWith("https://")
+                    ? path
+                    : $"{_baseUrl}/{path.TrimStart('/')}");
 
-            window.ShowAndRun(targetUrl);
+            // Pass the WebViewWindow owner object directly
+            window.ShowAndRun(targetUrl, owner);
         }) { IsBackground = true };
 
         uiThread.SetApartmentState(ApartmentState.STA);

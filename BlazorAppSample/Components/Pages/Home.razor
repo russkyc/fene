@@ -1,5 +1,8 @@
 ﻿@page "/"
+
 @using Russkyc.Fene
+
+@inject WindowManager WindowManager
 
 <PageTitle>Fene Platform Demos</PageTitle>
 
@@ -162,5 +165,11 @@
     {
         // Load fonts only when requested to demonstrate the utility
         _fonts = Platform.GetInstalledFonts();
+        InvokeAsync(StateHasChanged);
+        Platform.ShowMessageBox(
+            title: "Fonts Loaded", 
+            message: $"Found {_fonts?.Count() ?? 0} installed font families.",
+            owner: WindowManager.MainWindow
+        );
     }
 }

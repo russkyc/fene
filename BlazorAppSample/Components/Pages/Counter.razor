@@ -1,51 +1,161 @@
 ﻿@page "/counter"
 @using Russkyc.Fene
+@using System.Net
+@using System.IO
 @inject WindowManager WindowManager
 @implements IDisposable
 
+<PageTitle>Window & Session Controls</PageTitle>
+
 <div class="d-flex flex-wrap gap-2 mb-4">
     <button disabled="@_isOpening" class="btn btn-primary" @onclick="OpenWeatherPanel">Open Weather Panel</button>
-    <button disabled="@_isOpening" class="btn btn-dark border-light" @onclick="LaunchBorderlessSecondary">Launch Kiosk (Borderless Secondary)</button>
-    
-    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-info" @onclick="MoveToSecondaryDisplay">Center on Secondary</button>
-    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-success" @onclick="MaximizeOnSecondaryDisplay">Full Screen (Secondary)</button>
-    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-secondary" @onclick="MaximizeOnPrimaryDisplay">Full Screen (Primary)</button>
-    
-    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-light" @onclick="RestoreNormal">Restore Normal</button>
-    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-warning" @onclick="MinimizeWeather">Minimize</button>
+    <button disabled="@_isOpening" class="btn btn-dark border-light" @onclick="LaunchBorderlessSecondary">Launch Kiosk
+        (Borderless Secondary)
+    </button>
+
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-info" @onclick="MoveToSecondaryDisplay">Center
+        on Secondary
+    </button>
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-success" @onclick="MaximizeOnSecondaryDisplay">
+        Full Screen (Secondary)
+    </button>
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-secondary" @onclick="MaximizeOnPrimaryDisplay">
+        Full Screen (Primary)
+    </button>
+
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-light" @onclick="RestoreNormal">Restore Normal
+    </button>
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-warning" @onclick="MinimizeWeather">Minimize
+    </button>
     <button class="btn btn-danger" @onclick="CloseEverythingElse">Close Panel</button>
 </div>
 
-@if (_displays.Any())
-{
-    <div class="card p-3 mt-4 bg-dark text-light" style="max-width: 600px;">
-        <h5 class="mb-3">Hardware Displays Detected</h5>
-        <ul class="mb-0">
-            @foreach (var display in _displays)
-            {
-                <li>
-                    <strong>@(display.IsPrimary ? "Primary:" : "Secondary:")</strong> 
-                    @display.Width x @display.Height (X: @display.X, Y: @display.Y)
-                </li>
-            }
-        </ul>
+<div class="row g-4">
+    <!-- External Session Cookies Demo -->
+    <div class="col-md-6">
+        <div class="card h-100 bg-dark text-light border-secondary">
+            <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">External Session Cookies</h5>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-light" disabled="@(_googleWindowId != Guid.Empty)"
+                            @onclick="LaunchGoogleContainer">
+                        Launch Google
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if (_cookies != null && _cookies.Any())
+                {
+                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                        <table class="table table-dark table-striped table-hover table-sm mb-0">
+                            <thead class="sticky-top bg-dark">
+                            <tr>
+                                <th class="ps-3">Name</th>
+                                <th>Value</th>
+                                <th>Domain</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var cookie in _cookies)
+                            {
+                                <tr>
+                                    <td class="ps-3 text-truncate" style="max-width: 120px;"
+                                        title="@cookie.Name">@cookie.Name</td>
+                                    <td class="text-truncate" style="max-width: 150px;"
+                                        title="@cookie.Value">@cookie.Value</td>
+                                    <td>@cookie.Domain</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="p-4 text-center text-muted">
+                        <small>@(_googleWindowId != Guid.Empty ? "Google is open. Click 'Scrape Cookies' to extract session data." : "No active external session.")</small>
+                    </div>
+                }
+            </div>
+        </div>
     </div>
-}
+
+    <!-- Hardware Displays Demo -->
+    <div class="col-md-6">
+        @if (_displays.Any())
+        {
+            <div class="card h-100 bg-dark text-light border-secondary">
+                <div class="card-header border-secondary">
+                    <h5 class="mb-0">Hardware Displays Detected</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush mb-0">
+                        @foreach (var display in _displays)
+                        {
+                            <li class="list-group-item bg-dark text-light border-secondary px-0">
+                                <strong>@(display.IsPrimary ? "Primary:" : "Secondary:")</strong>
+                                @display.Bounds.Width x @display.Bounds.Height (X: @display.Bounds.X,
+                                Y: @display.Bounds.Y)
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    </div>
+</div>
 
 @code {
     private bool _isOpening;
     private Guid _weatherWindowId = Guid.Empty;
+    private Guid _googleWindowId = Guid.Empty;
+
     private IReadOnlyList<Display> _displays = Array.Empty<Display>();
-    
+    private List<Cookie>? _cookies;
+
     // Trackers for event cleanups
     private WebViewWindow? _initWindowReference;
     private WebViewWindow? _activeWeatherWindow;
 
     protected override void OnInitialized()
     {
-        _initWindowReference = new WebViewWindow();
+        base.OnInitialized();
+        _initWindowReference = WindowManager.MainWindow;
+        if (_initWindowReference == null) return;
         _displays = _initWindowReference.Displays;
         _initWindowReference.DisplaysChanged += RefreshDisplays;
+    }
+
+    private async Task LaunchGoogleContainer()
+    {
+        _isOpening = true;
+        StateHasChanged();
+
+        var googleWindow = new WebViewWindow("Google Container", 1000, 700)
+        {
+            EnableDarkMode = true,
+            UserDataFolder = WindowManager.MainWindow!.UserDataFolder,
+            ShowOnlyAfterLoad = true
+        };
+
+        // Enable standard browser shortcuts and status bar for this specific external window
+        googleWindow.Options.AreBrowserAcceleratorKeysEnabled = true;
+        googleWindow.Options.IsStatusBarEnabled = true;
+
+        googleWindow.Closed += () =>
+        {
+            _googleWindowId = Guid.Empty;
+            _cookies = null; // Clear the UI when the window dies
+            InvokeAsync(StateHasChanged);
+        };
+
+        // Launch directly to the external URL
+        await WindowManager.ShowDialogAsync("https://www.google.com", googleWindow, true, WindowManager.MainWindow);
+
+        // Extract the cookies silently from the active Google window's native loop
+        _cookies = await WindowManager.MainWindow.GetCookiesAsync("https://www.google.com");
+        _isOpening = false;
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task OpenWeatherPanel()
@@ -77,12 +187,11 @@
         _isOpening = true;
         StateHasChanged();
 
-        // Configure a borderless window that perfectly matches the secondary screen's dimensions and coordinates
-        var kioskWindow = new WebViewWindow("Weather Kiosk", secondaryDisplay.Width, secondaryDisplay.Height)
+        var kioskWindow = new WebViewWindow("Weather Kiosk", secondaryDisplay.Bounds.Width, secondaryDisplay.Bounds.Height)
         {
             IsBorderless = true,
-            X = secondaryDisplay.X,
-            Y = secondaryDisplay.Y,
+            X = secondaryDisplay.Bounds.X,
+            Y = secondaryDisplay.Bounds.Y,
             EnableDarkMode = true,
             BackgroundColor = System.Drawing.Color.FromArgb(255, 10, 10, 10),
             UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "Secondary"),
@@ -95,18 +204,20 @@
 
     private async Task BootAndTrackWindow(WebViewWindow window)
     {
-        _activeWeatherWindow = window;
-        _activeWeatherWindow.DisplaysChanged += RefreshDisplays;
-
-        _activeWeatherWindow.Closed += () => 
+        if (_activeWeatherWindow != null)
         {
-            if (_activeWeatherWindow != null) _activeWeatherWindow.DisplaysChanged -= RefreshDisplays;
+            WindowManager.CloseWindow(_weatherWindowId);
+        }
+        _activeWeatherWindow = window;
+
+        _activeWeatherWindow.Closed += () =>
+        {
             _weatherWindowId = Guid.Empty;
             InvokeAsync(StateHasChanged);
         };
 
         _weatherWindowId = await WindowManager.OpenAsync("/weather", window);
-        
+
         _isOpening = false;
         StateHasChanged();
     }
@@ -123,7 +234,7 @@
             {
                 _displays = _initWindowReference.Displays;
             }
-            
+
             StateHasChanged();
         });
     }
@@ -134,12 +245,12 @@
         if (window != null)
         {
             var secondaryDisplay = window.Displays.FirstOrDefault(d => !d.IsPrimary);
-            
+
             if (secondaryDisplay != null)
             {
-                var centeredX = secondaryDisplay.X + (secondaryDisplay.Width / 2) - (400); 
-                var centeredY = secondaryDisplay.Y + (secondaryDisplay.Height / 2) - 300; 
-                
+                var centeredX = secondaryDisplay.Bounds.X + (secondaryDisplay.Bounds.Width / 2) - (400);
+                var centeredY = secondaryDisplay.Bounds.Y + (secondaryDisplay.Bounds.Height / 2) - 300;
+
                 window.WindowState = WindowState.Normal;
                 window.SetLocation(centeredX, centeredY);
             }
@@ -152,11 +263,11 @@
         if (window != null)
         {
             var secondaryDisplay = window.Displays.FirstOrDefault(d => !d.IsPrimary);
-            
+
             if (secondaryDisplay != null)
             {
-                window.WindowState = WindowState.Normal; 
-                window.SetLocation(secondaryDisplay.X + 50, secondaryDisplay.Y + 50);
+                window.WindowState = WindowState.Normal;
+                window.SetLocation(secondaryDisplay.Bounds.X + 50, secondaryDisplay.Bounds.Y + 50);
                 window.WindowState = WindowState.Maximized;
             }
         }
@@ -168,11 +279,11 @@
         if (window != null)
         {
             var primaryDisplay = window.Displays.FirstOrDefault(d => d.IsPrimary);
-            
+
             if (primaryDisplay != null)
             {
-                window.WindowState = WindowState.Normal; 
-                window.SetLocation(primaryDisplay.X + 50, primaryDisplay.Y + 50);
+                window.WindowState = WindowState.Normal;
+                window.SetLocation(primaryDisplay.Bounds.X + 50, primaryDisplay.Bounds.Y + 50);
                 window.WindowState = WindowState.Maximized;
             }
         }
@@ -193,14 +304,15 @@
     private void CloseEverythingElse()
     {
         WindowManager.CloseAllWindows();
-        
+
         if (_activeWeatherWindow != null)
         {
             _activeWeatherWindow.DisplaysChanged -= RefreshDisplays;
             _activeWeatherWindow = null;
         }
-        
-        _weatherWindowId = Guid.Empty; 
+
+        _weatherWindowId = Guid.Empty;
+        _googleWindowId = Guid.Empty;
     }
 
     public void Dispose()
@@ -208,4 +320,5 @@
         if (_initWindowReference != null) _initWindowReference.DisplaysChanged -= RefreshDisplays;
         if (_activeWeatherWindow != null) _activeWeatherWindow.DisplaysChanged -= RefreshDisplays;
     }
+
 }

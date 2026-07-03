@@ -53,6 +53,7 @@ MONITORINFO
 HWND_TOPMOST
 HWND_NOTOPMOST
 SetForegroundWindow
+EnableWindow
 
 IFileDialog
 IFileOpenDialog

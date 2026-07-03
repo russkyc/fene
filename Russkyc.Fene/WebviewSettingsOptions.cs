@@ -19,5 +19,14 @@ public sealed class WebViewSettingsOptions
     public bool IsGestureAutoplayBlocked { get; set; } = false;
     public bool AreHostObjectsAllowed { get; set; } = true;
     public bool IsPinchZoomEnabled { get; set; } = true;
-    public bool IsSwipeNavigationEnabled { get; set; } = true;
+    
+    // UI and Permission controls
+    public bool IsStatusBarEnabled { get; set; } = false;
+    public bool AutomaticallyAllowAllPermissions { get; set; } = true;
+    
+    // Desktop App Illusion Controls
+    public bool IsSwipeNavigationEnabled { get; set; } = false;
+    public bool AreDefaultContextMenusEnabled { get; set; } = false;
+    public bool AreBrowserAcceleratorKeysEnabled { get; set; } = false;
+    public bool PreventDragAndDropNavigation { get; set; } = true;
 }

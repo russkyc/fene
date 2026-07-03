@@ -17,6 +17,7 @@ namespace Russkyc.Fene;
 public class WebViewWindow(string title = "WebView Window", int width = 600, int height = 500)
 {
     public const uint WmSynchronizationcontextWorkAvailable = PInvoke.WM_USER + 1;
+    public const uint WmProcessWorkQueue = PInvoke.WM_USER + 2; // NEW: Added message constant
     
     private static readonly HWND HWND_TOPMOST = new(-1);
     private static readonly HWND HWND_NOTOPMOST = new(-2);
@@ -52,6 +53,8 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     public int? X { get; set; }
     public int? Y { get; set; }
 
+    public unsafe IntPtr Handle => (IntPtr)_hwnd.Value;
+    
     private WindowState _windowState = WindowState.Normal;
 
     public WindowState WindowState
@@ -154,6 +157,17 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         return tcs.Task;
     }
 
+    // NEW: Centralized queue method that wakes the message pump
+    private void EnqueueWork(Action action)
+    {
+        _workQueue.Enqueue(action);
+        
+        if (!_hwnd.IsNull)
+        {
+            PInvoke.PostMessage(_hwnd, WmProcessWorkQueue, 0, 0);
+        }
+    }
+
     /// <summary>
     /// Retrieves cookies for the specified URI. If no URI is provided, returns all cookies.
     /// </summary>
@@ -161,7 +175,8 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     {
         var tcs = new TaskCompletionSource<List<Cookie>>();
 
-        _workQueue.Enqueue(async () =>
+        // UPDATED: Now uses EnqueueWork to prevent starvation delays
+        EnqueueWork(async () =>
         {
             try
             {
@@ -217,7 +232,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         return container;
     }
 
-    public unsafe void ShowAndRun(string startUrl)
+    public unsafe void ShowAndRun(string startUrl, WebViewWindow? owner = null)
     {
 #if DEBUG
         PInvoke.AllocConsole();
@@ -268,12 +283,26 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         var startY = Y ?? PInvoke.CW_USEDEFAULT;
 
         var style = IsBorderless ? WINDOW_STYLE.WS_POPUP : WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
+        
+        // Extract the handle from the owner object, defaulting to Zero if null
+        IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
 
         fixed (char* windowNamePtr = title)
         fixed (char* classNamePtr = className)
         {
-            _hwnd = PInvoke.CreateWindowEx(0, classNamePtr, windowNamePtr, style, startX,
-                startY, width, height, default, default, hInstance, null);
+            _hwnd = PInvoke.CreateWindowEx(
+                0, 
+                classNamePtr, 
+                windowNamePtr, 
+                style, 
+                startX, 
+                startY, 
+                width, 
+                height, 
+                new HWND(ownerHandle), // Asserts OS-level ownership
+                default, 
+                hInstance, 
+                null);
         }
 
         if (_hwnd.IsNull) throw new Exception("Window creation handle extraction failed.");
@@ -394,13 +423,15 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
 
     private LRESULT HandleMessage(uint msg, WPARAM wParam, LPARAM lParam)
     {
-        while (_workQueue.TryDequeue(out var action))
-        {
-            action();
-        }
-
         switch (msg)
         {
+            case WmProcessWorkQueue: // NEW: Explicitly process queue only when told to
+                while (_workQueue.TryDequeue(out var action))
+                {
+                    action();
+                }
+                return default;
+
             case PInvoke.WM_SIZE:
                 int windowWidth = unchecked((short)(uint)lParam.Value);
                 int windowHeight = unchecked((short)((uint)lParam.Value >> 16));
@@ -492,6 +523,9 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             s.AreHostObjectsAllowed = Options.AreHostObjectsAllowed;
             s.IsPinchZoomEnabled = Options.IsPinchZoomEnabled;
             s.IsSwipeNavigationEnabled = Options.IsSwipeNavigationEnabled;
+            s.IsStatusBarEnabled = Options.IsStatusBarEnabled;
+            s.AreDefaultContextMenusEnabled = Options.AreDefaultContextMenusEnabled;
+            s.AreBrowserAcceleratorKeysEnabled = Options.AreBrowserAcceleratorKeysEnabled;
 
             if (!string.IsNullOrEmpty(UserAgentOverride))
             {
@@ -500,6 +534,21 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             else
             {
                 s.UserAgent = s.UserAgent + (Options.IsGestureAutoplayBlocked ? " BlockGestureAutoplay" : "");
+            }
+            
+            if (Options.AutomaticallyAllowAllPermissions)
+            {
+                _controller.CoreWebView2.PermissionRequested += (_, e) =>
+                {
+                    e.State = CoreWebView2PermissionState.Allow;
+                };
+            }
+            
+            if (Options.PreventDragAndDropNavigation)
+            {
+                await _controller.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                    "window.addEventListener('dragover', e => e.preventDefault()); window.addEventListener('drop', e => e.preventDefault());"
+                );
             }
 
             _controller.CoreWebView2.WebMessageReceived += (_, e) =>
