@@ -11,19 +11,13 @@ using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Russkyc.Fene;
 
-// A clean enum for developer consumption
-public enum WindowState
-{
-    Normal,
-    Minimized,
-    Maximized
-}
-
+/// <summary>
+/// Represents a native window hosting a WebView2 control.
+/// </summary>
 public class WebViewWindow(string title = "WebView Window", int width = 600, int height = 500)
 {
     public const uint WmSynchronizationcontextWorkAvailable = PInvoke.WM_USER + 1;
-
-    // --- Manual Macro Definitions skipped by CsWin32 ---
+    
     private static readonly HWND HWND_TOPMOST = new(-1);
     private static readonly HWND HWND_NOTOPMOST = new(-2);
 
@@ -43,20 +37,18 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
 
     private readonly List<HostMapping> _mappings = new();
 
-    // --- Configuration Hooks ---
     public Color BackgroundColor { get; set; } = Color.Transparent;
     public bool EnableDarkMode { get; set; } = false;
     public string? IconPath { get; set; } = null;
     public string? UserDataFolder { get; set; } = null;
     public bool ShowOnlyAfterLoad { get; set; } = false;
     public bool IsBorderless { get; set; } = false;
-
+    
     /// <summary>
-    /// Overrides the client browser signature. Must be set BEFORE the window is opened.
+    /// Gets or sets the custom User-Agent string for this window.
     /// </summary>
     public string? UserAgentOverride { get; set; }
 
-    // --- NEW: Location and State ---
     public int? X { get; set; }
     public int? Y { get; set; }
 
@@ -68,25 +60,23 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         set
         {
             _windowState = value;
-            if (!_hwnd.IsNull) ApplyWindowState(); // Updates live window instantly
+            if (!_hwnd.IsNull) ApplyWindowState();
         }
     }
-
+    
     private bool _isTopMost;
-
     public bool IsTopMost
     {
         get => _isTopMost;
         set
         {
             _isTopMost = value;
-            if (!_hwnd.IsNull) ApplyTopMostState(); // Update live state instantly
+            if (!_hwnd.IsNull) ApplyTopMostState();
         }
     }
-
+    
     public WebViewSettingsOptions Options { get; } = new();
 
-    // --- Exposed Native Events ---
     public event Action<string>? WebMessageReceived;
     public event Action<string>? NavigationStarted;
     public event Action<string>? NavigationCompleted;
@@ -97,8 +87,6 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     {
         _mappings.Add(new HostMapping { HostName = hostName, FolderPath = folderPath, AccessKind = accessKind });
     }
-
-    // --- Exhaustive Runtime APIs ---
 
     public void Navigate(string url) => _controller?.CoreWebView2.Navigate(url);
 
@@ -113,7 +101,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     public void OpenDevTools() => _controller?.CoreWebView2.OpenDevToolsWindow();
 
     /// <summary>
-    /// Dynamically moves the window to a new location on the screen.
+    /// Sets the window position.
     /// </summary>
     public void SetLocation(int x, int y)
     {
@@ -121,14 +109,13 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         Y = y;
         if (!_hwnd.IsNull)
         {
-            // SWP_NOSIZE and SWP_NOZORDER ensure we ONLY change the position, not the dimensions or depth.
             PInvoke.SetWindowPos(_hwnd, HWND.Null, x, y, 0, 0,
                 SET_WINDOW_POS_FLAGS.SWP_NOSIZE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER);
         }
     }
 
     /// <summary>
-    /// Forces the window forward onto the desktop layer and assigns foreground focus.
+    /// Brings the window to the foreground.
     /// </summary>
     public void BringToFront()
     {
@@ -139,8 +126,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     }
 
     /// <summary>
-    /// Forcefully purges local state, cookies, DOM storage, and network caching targets.
-    /// Useful for logging out users clean or wiping state.
+    /// Clears all browsing data from the associated profile.
     /// </summary>
     public Task ClearBrowsingDataAsync()
     {
@@ -156,7 +142,6 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         {
             try
             {
-                // CoreWebView2ClearBrowsingDataKinds.All Clear targets everything in the profile
                 await _controller.CoreWebView2.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
                 tcs.SetResult();
             }
@@ -170,13 +155,12 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     }
 
     /// <summary>
-    /// Fetches all cookies for the current window's environment, regardless of URI.
+    /// Retrieves cookies for the specified URI. If no URI is provided, returns all cookies.
     /// </summary>
-    public Task<List<Cookie>> GetCookiesAsync(string? url = null)
+    public Task<List<Cookie>> GetCookiesAsync(string uri = "")
     {
         var tcs = new TaskCompletionSource<List<Cookie>>();
 
-        // Simply enqueue the work. The message loop will grab it on the next cycle.
         _workQueue.Enqueue(async () =>
         {
             try
@@ -187,20 +171,23 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                     return;
                 }
 
-                var wvCookies = await _controller.CoreWebView2.CookieManager.GetCookiesAsync(url);
+                var targetUri = string.IsNullOrEmpty(uri) ? _controller.CoreWebView2.Source : uri;
+                
+                var wvCookies = await _controller.CoreWebView2.CookieManager.GetCookiesAsync(targetUri);
                 var netCookies = new List<Cookie>();
 
-                foreach (var cookie in wvCookies)
+                foreach (var wvCookie in wvCookies)
                 {
-                    try
+                    try 
                     {
-                        netCookies.Add(cookie.ToSystemNetCookie());
+                        netCookies.Add(wvCookie.ToSystemNetCookie());
                     }
                     catch
                     {
-                        // Ignore
+                        // ignored
                     }
                 }
+
                 tcs.SetResult(netCookies);
             }
             catch (Exception ex)
@@ -213,16 +200,15 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     }
 
     /// <summary>
-    /// Generates a ready-to-use CookieContainer perfectly primed for use in an HttpClientHandler.
+    /// Generates a CookieContainer from the current window's cookies.
     /// </summary>
-    public async Task<CookieContainer> GetCookieContainerAsync(string? url = null)
+    public async Task<CookieContainer> GetCookieContainerAsync(string uri = "")
     {
-        var cookies = await GetCookiesAsync(url);
+        var cookies = await GetCookiesAsync(uri);
         var container = new CookieContainer();
 
         foreach (var cookie in cookies)
         {
-            // Skip cookies without domains to avoid CookieContainer validation crashes
             if (string.IsNullOrEmpty(cookie.Domain)) continue;
 
             container.Add(cookie);
@@ -278,11 +264,9 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             if (PInvoke.RegisterClass(wc) == 0) throw new Exception("Win32 class registration failed.");
         }
 
-        // Apply custom X/Y if provided, otherwise let Windows pick the default
         var startX = X ?? PInvoke.CW_USEDEFAULT;
         var startY = Y ?? PInvoke.CW_USEDEFAULT;
 
-        // Determine if we are rendering OS window chrome or a raw popup canvas
         var style = IsBorderless ? WINDOW_STYLE.WS_POPUP : WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
 
         fixed (char* windowNamePtr = title)
@@ -351,17 +335,12 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         }
     }
 
-    /// <summary>
-    /// Gets the live list of physical screens currently connected to the system.
-    /// Computes synchronously on-demand.
-    /// </summary>
     public unsafe IReadOnlyList<Display> Displays
     {
         get
         {
             var displays = new List<Display>();
 
-            // The OS fires this callback synchronously for every screen it finds
             BOOL Callback(HMONITOR hMonitor, HDC hdc, RECT* rect, LPARAM lparam)
             {
                 var mi = new MONITORINFO();
@@ -375,14 +354,13 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                             mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top),
                         WorkingArea = new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right - mi.rcWork.left,
                             mi.rcWork.bottom - mi.rcWork.top),
-                        IsPrimary = (mi.dwFlags & 1) == 1 // MONITORINFOF_PRIMARY is exactly 1 natively
+                        IsPrimary = (mi.dwFlags & 1) == 1
                     });
                 }
 
                 return true;
             }
 
-            // Trigger the native enumeration 
             PInvoke.EnumDisplayMonitors(default, null, Callback, default);
 
             return displays;
@@ -404,7 +382,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     {
         var placementFlags = SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE;
         var insertAfterTarget = _isTopMost ? HWND_TOPMOST : HWND_NOTOPMOST;
-
+        
         PInvoke.SetWindowPos(_hwnd, insertAfterTarget, 0, 0, 0, 0, placementFlags);
     }
 
@@ -445,7 +423,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 }
                 catch
                 {
-                    // Ignored
+                    // ignored
                 }
 
                 PInvoke.DestroyWindow(_hwnd);
@@ -459,7 +437,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 }
                 catch
                 {
-                    // Ignored
+                    // ignored
                 }
 
                 Closed?.Invoke();
@@ -515,7 +493,6 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             s.IsPinchZoomEnabled = Options.IsPinchZoomEnabled;
             s.IsSwipeNavigationEnabled = Options.IsSwipeNavigationEnabled;
 
-            // Apply custom UserAgent if provided
             if (!string.IsNullOrEmpty(UserAgentOverride))
             {
                 s.UserAgent = UserAgentOverride;
@@ -536,7 +513,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 if (ShowOnlyAfterLoad)
                 {
                     ApplyWindowState();
-                    if (IsTopMost) ApplyTopMostState(); // Ensure sticky pinning stays true after delayed load
+                    if (IsTopMost) ApplyTopMostState();
                     PInvoke.UpdateWindow(_hwnd);
                 }
 

@@ -1,3 +1,4 @@
+using System.Drawing;
 using BlazorAppSample.Components;
 using Russkyc.Fene;
 
@@ -26,7 +27,7 @@ app.MapRazorComponents<App>()
 var mainWindow = new WebViewWindow("Blazor App Sample", 1200, 800)
 {
     EnableDarkMode = true,
-    BackgroundColor = System.Drawing.Color.FromArgb(255, 30, 30, 30),
+    BackgroundColor = Color.FromArgb(255, 30, 30, 30),
     UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "MainShell"),
     ShowOnlyAfterLoad = true
 };
