@@ -1,11 +1,12 @@
 ﻿using System.Collections.Concurrent;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
 using Windows.Win32.Foundation;
-using Windows.Win32.Graphics.Dwm; 
+using Windows.Win32.Graphics.Dwm;
 using Windows.Win32.Graphics.Gdi;
-using Windows.Win32.UI.WindowsAndMessaging; 
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Russkyc.Fene;
 
@@ -25,13 +26,14 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     private HWND _hwnd;
     private CoreWebView2Controller? _controller;
     private UiThreadSynchronizationContext? _uiThreadSyncCtx;
-    
+
     private struct HostMapping
     {
         public string HostName { get; set; }
         public string FolderPath { get; set; }
         public HostResourceAccessKind AccessKind { get; set; }
     }
+
     private readonly List<HostMapping> _mappings = new();
 
     // --- Configuration Hooks ---
@@ -40,12 +42,14 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     public string? IconPath { get; set; } = null;
     public string? UserDataFolder { get; set; } = null;
     public bool ShowOnlyAfterLoad { get; set; } = false;
+    public bool IsBorderless { get; set; } = false;
 
     // --- NEW: Location and State ---
     public int? X { get; set; }
     public int? Y { get; set; }
-    
+
     private WindowState _windowState = WindowState.Normal;
+
     public WindowState WindowState
     {
         get => _windowState;
@@ -63,6 +67,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     public event Action<string>? NavigationStarted;
     public event Action<string>? NavigationCompleted;
     public event Action? Closed;
+    public event Action? DisplaysChanged;
 
     public void MapVirtualHost(string hostName, string folderPath, HostResourceAccessKind accessKind)
     {
@@ -70,7 +75,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     }
 
     // --- Exhaustive Runtime APIs ---
-    
+
     public void Navigate(string url) => _controller?.CoreWebView2.Navigate(url);
 
     public async Task<string> ExecuteScriptAsync(string script)
@@ -93,7 +98,8 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         if (!_hwnd.IsNull)
         {
             // SWP_NOSIZE and SWP_NOZORDER ensure we ONLY change the position, not the dimensions or depth.
-            PInvoke.SetWindowPos(_hwnd, HWND.Null, x, y, 0, 0, SET_WINDOW_POS_FLAGS.SWP_NOSIZE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER);
+            PInvoke.SetWindowPos(_hwnd, HWND.Null, x, y, 0, 0,
+                SET_WINDOW_POS_FLAGS.SWP_NOSIZE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER);
         }
     }
 
@@ -106,7 +112,8 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         HINSTANCE hInstance = PInvoke.GetModuleHandle((char*)null);
         string className = $"WebViewWindowClass_{Guid.NewGuid():N}";
 
-        COLORREF winColor = new COLORREF((uint)((BackgroundColor.B << 16) | (BackgroundColor.G << 8) | BackgroundColor.R));
+        COLORREF winColor =
+            new COLORREF((uint)((BackgroundColor.B << 16) | (BackgroundColor.G << 8) | BackgroundColor.R));
         HBRUSH backgroundBrush = PInvoke.CreateSolidBrush(winColor);
         if (backgroundBrush.IsNull)
         {
@@ -118,7 +125,8 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         {
             fixed (char* iconPathPtr = IconPath)
             {
-                var hImage = PInvoke.LoadImage(default, iconPathPtr, GDI_IMAGE_TYPE.IMAGE_ICON, 0, 0, IMAGE_FLAGS.LR_LOADFROMFILE | IMAGE_FLAGS.LR_DEFAULTSIZE);
+                var hImage = PInvoke.LoadImage(default, iconPathPtr, GDI_IMAGE_TYPE.IMAGE_ICON, 0, 0,
+                    IMAGE_FLAGS.LR_LOADFROMFILE | IMAGE_FLAGS.LR_DEFAULTSIZE);
                 hIcon = new HICON(hImage.Value);
             }
         }
@@ -143,13 +151,17 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         }
 
         // Apply custom X/Y if provided, otherwise let Windows pick the default
-        int startX = X ?? PInvoke.CW_USEDEFAULT;
-        int startY = Y ?? PInvoke.CW_USEDEFAULT;
+        var startX = X ?? PInvoke.CW_USEDEFAULT;
+        var startY = Y ?? PInvoke.CW_USEDEFAULT;
+
+        // Determine if we are rendering OS window chrome or a raw popup canvas
+        var style = IsBorderless ? WINDOW_STYLE.WS_POPUP : WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
 
         fixed (char* windowNamePtr = title)
         fixed (char* classNamePtr = className)
         {
-            _hwnd = PInvoke.CreateWindowEx(0, classNamePtr, windowNamePtr, WINDOW_STYLE.WS_OVERLAPPEDWINDOW, startX, startY, width, height, default, default, hInstance, null);
+            _hwnd = PInvoke.CreateWindowEx(0, classNamePtr, windowNamePtr, style, startX,
+                startY, width, height, default, default, hInstance, null);
         }
 
         if (_hwnd.IsNull) throw new Exception("Window creation handle extraction failed.");
@@ -159,17 +171,18 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         if (!hIcon.IsNull)
         {
             var iconPtrValue = (nint)hIcon.Value;
-            PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 0, iconPtrValue); 
-            PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 1, iconPtrValue); 
+            PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 0, iconPtrValue);
+            PInvoke.SendMessage(_hwnd, PInvoke.WM_SETICON, 1, iconPtrValue);
         }
 
         if (EnableDarkMode)
         {
             int useDarkMode = 1;
-            HRESULT hr = PInvoke.DwmSetWindowAttribute(_hwnd, DWMWINDOWATTRIBUTE.DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(int));
+            HRESULT hr = PInvoke.DwmSetWindowAttribute(_hwnd, DWMWINDOWATTRIBUTE.DWMWA_USE_IMMERSIVE_DARK_MODE,
+                &useDarkMode, sizeof(int));
             if (hr.Failed)
             {
-                int fallbackAttribute = 19; 
+                int fallbackAttribute = 19;
                 PInvoke.DwmSetWindowAttribute(_hwnd, (DWMWINDOWATTRIBUTE)fallbackAttribute, &useDarkMode, sizeof(int));
             }
         }
@@ -188,8 +201,8 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         while (true)
         {
             int bRet = PInvoke.GetMessage(out msg, default, 0, 0).Value;
-            
-            if (bRet == 0 || bRet == -1) 
+
+            if (bRet == 0 || bRet == -1)
             {
                 break;
             }
@@ -197,10 +210,10 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             PInvoke.TranslateMessage(msg);
             PInvoke.DispatchMessage(msg);
         }
-        
+
         WindowMap.TryRemove(_hwnd, out _);
     }
-    
+
     public void Close()
     {
         if (!_hwnd.IsNull)
@@ -208,7 +221,41 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             PInvoke.SendMessage(_hwnd, PInvoke.WM_CLOSE);
         }
     }
-    
+
+    /// <summary>
+    /// Gets the live list of physical screens currently connected to the system.
+    /// Computes synchronously on-demand.
+    /// </summary>
+    public unsafe IReadOnlyList<Display> Displays
+    {
+        get
+        {
+            var displays = new List<Display>();
+
+            // The OS fires this callback synchronously for every screen it finds
+            BOOL Callback(HMONITOR hMonitor, HDC hdc, RECT* rect, LPARAM lparam)
+            {
+                var mi = new MONITORINFO();
+                mi.cbSize = (uint)Marshal.SizeOf<MONITORINFO>();
+
+                if (PInvoke.GetMonitorInfo(hMonitor, ref mi))
+                {
+                    displays.Add(new Display
+                    {
+                        Bounds = new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top), WorkingArea = new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right - mi.rcWork.left, mi.rcWork.bottom - mi.rcWork.top), IsPrimary = (mi.dwFlags & 1) == 1 // MONITORINFOF_PRIMARY is exactly 1 natively
+                    });
+                }
+
+                return true;
+            }
+
+            // Trigger the native enumeration 
+            PInvoke.EnumDisplayMonitors(default, null, Callback, default);
+
+            return displays;
+        }
+    }
+
     private void ApplyWindowState()
     {
         var cmd = _windowState switch
@@ -235,11 +282,15 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 int windowHeight = unchecked((short)((uint)lParam.Value >> 16));
                 if (_controller != null) _controller.Bounds = new Rectangle(0, 0, windowWidth, windowHeight);
                 break;
-                
+
             case WmSynchronizationcontextWorkAvailable:
                 _uiThreadSyncCtx?.RunAvailableWorkOnCurrentThread();
                 break;
-                
+            
+            case PInvoke.WM_DISPLAYCHANGE:
+                DisplaysChanged?.Invoke();
+                break;
+            
             case PInvoke.WM_CLOSE:
                 try
                 {
@@ -250,10 +301,10 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 {
                     // Ignored
                 }
-                
+
                 PInvoke.DestroyWindow(_hwnd);
                 return default;
-                
+
             case PInvoke.WM_DESTROY:
                 try
                 {
@@ -264,12 +315,12 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 {
                     // Ignored
                 }
-                
+
                 Closed?.Invoke();
                 PInvoke.PostQuitMessage(0);
                 return default;
         }
-    
+
         return PInvoke.DefWindowProc(_hwnd, msg, wParam, lParam);
     }
 
@@ -283,26 +334,27 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             if (!string.IsNullOrEmpty(Options.AdditionalBrowserArguments)) args.Add(Options.AdditionalBrowserArguments);
 
             var envOptions = new CoreWebView2EnvironmentOptions(string.Join(" ", args));
-            
+
             var environment = await CoreWebView2Environment.CreateAsync(
-                browserExecutableFolder: null, 
-                userDataFolder: UserDataFolder, 
+                browserExecutableFolder: null,
+                userDataFolder: UserDataFolder,
                 options: envOptions
             );
-            
+
             _controller = await environment.CreateCoreWebView2ControllerAsync(_hwnd);
 
             foreach (var mapping in _mappings)
             {
                 _controller.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                    mapping.HostName, 
-                    mapping.FolderPath, 
-                    (CoreWebView2HostResourceAccessKind)mapping.AccessKind 
+                    mapping.HostName,
+                    mapping.FolderPath,
+                    (CoreWebView2HostResourceAccessKind)mapping.AccessKind
                 );
             }
 
             _controller.DefaultBackgroundColor = BackgroundColor;
-            if (EnableDarkMode) _controller.CoreWebView2.Profile.PreferredColorScheme = CoreWebView2PreferredColorScheme.Dark;
+            if (EnableDarkMode)
+                _controller.CoreWebView2.Profile.PreferredColorScheme = CoreWebView2PreferredColorScheme.Dark;
 
             var s = _controller.CoreWebView2.Settings;
             s.AreDevToolsEnabled = Options.AreDevToolsEnabled;
@@ -316,20 +368,23 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             s.AreHostObjectsAllowed = Options.AreHostObjectsAllowed;
             s.IsPinchZoomEnabled = Options.IsPinchZoomEnabled;
             s.IsSwipeNavigationEnabled = Options.IsSwipeNavigationEnabled;
-            
+
             s.UserAgent = s.UserAgent + (Options.IsGestureAutoplayBlocked ? " BlockGestureAutoplay" : "");
 
-            _controller.CoreWebView2.WebMessageReceived += (_, e) => {
+            _controller.CoreWebView2.WebMessageReceived += (_, e) =>
+            {
                 var text = e.TryGetWebMessageAsString();
                 if (!string.IsNullOrEmpty(text)) WebMessageReceived?.Invoke(text);
             };
             _controller.CoreWebView2.NavigationStarting += (_, e) => NavigationStarted?.Invoke(e.Uri);
-            _controller.CoreWebView2.NavigationCompleted += (_, _) => {
+            _controller.CoreWebView2.NavigationCompleted += (_, _) =>
+            {
                 if (ShowOnlyAfterLoad)
                 {
                     ApplyWindowState(); // Apply proper state on load instead of SW_NORMAL blindly
                     PInvoke.UpdateWindow(_hwnd);
                 }
+
                 NavigationCompleted?.Invoke(_controller.CoreWebView2.Source);
             };
 
@@ -340,7 +395,8 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         }
         catch (Exception ex)
         {
-            PInvoke.MessageBox(_hwnd, $"WebView2 Exception: {ex.Message}", "Critical Failure", MESSAGEBOX_STYLE.MB_OK | MESSAGEBOX_STYLE.MB_ICONERROR);
+            PInvoke.MessageBox(_hwnd, $"WebView2 Exception: {ex.Message}", "Critical Failure",
+                MESSAGEBOX_STYLE.MB_OK | MESSAGEBOX_STYLE.MB_ICONERROR);
             Environment.Exit(1);
         }
     }

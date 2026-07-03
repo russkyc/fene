@@ -4,10 +4,13 @@ namespace Russkyc.Fene;
 
 public class WindowManager
 {
+    private WebViewWindow? _mainWindow;
     private string _baseUrl = string.Empty;
     
     // Thread-safe tracking collection for all spawned secondary windows
     private readonly ConcurrentDictionary<Guid, WebViewWindow> _activeWindows = new();
+    
+    public WebViewWindow? MainWindow => _mainWindow;
 
     internal void Initialize(string baseUrl)
     {
@@ -21,12 +24,17 @@ public class WindowManager
     public Task<Guid> OpenAsync(string path, WebViewWindow window, bool isMainWindow = false)
     {
         var tcs = new TaskCompletionSource<Guid>();
+
         var windowId = Guid.NewGuid();
         
         if (!isMainWindow)
         {
             _activeWindows.TryAdd(windowId, window);
             window.Closed += () => _activeWindows.TryRemove(windowId, out _);
+        }
+        else
+        {
+            _mainWindow = window;
         }
 
         // Bridge the async gap: complete the Task when the page is fully ready

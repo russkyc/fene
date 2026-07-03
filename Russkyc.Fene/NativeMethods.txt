@@ -44,3 +44,8 @@ HRESULT
 PCWSTR
 
 GetConsoleWindow
+
+WM_DISPLAYCHANGE
+EnumDisplayMonitors
+GetMonitorInfo
+MONITORINFO

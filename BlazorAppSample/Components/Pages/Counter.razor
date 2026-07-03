@@ -1,36 +1,211 @@
 ﻿@page "/counter"
 @using Russkyc.Fene
 @inject WindowManager WindowManager
+@implements IDisposable
 
-<button disabled="@_isOpening" class="btn btn-primary" @onclick="OpenSettings">Open Settings Panel</button>
-<button class="btn btn-danger" @onclick="CloseEverythingElse">Close Secondary Windows</button>
+<div class="d-flex flex-wrap gap-2 mb-4">
+    <button disabled="@_isOpening" class="btn btn-primary" @onclick="OpenWeatherPanel">Open Weather Panel</button>
+    <button disabled="@_isOpening" class="btn btn-dark border-light" @onclick="LaunchBorderlessSecondary">Launch Kiosk (Borderless Secondary)</button>
+    
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-info" @onclick="MoveToSecondaryDisplay">Center on Secondary</button>
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-success" @onclick="MaximizeOnSecondaryDisplay">Full Screen (Secondary)</button>
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-secondary" @onclick="MaximizeOnPrimaryDisplay">Full Screen (Primary)</button>
+    
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-light" @onclick="RestoreNormal">Restore Normal</button>
+    <button disabled="@(_weatherWindowId == Guid.Empty)" class="btn btn-warning" @onclick="MinimizeWeather">Minimize</button>
+    <button class="btn btn-danger" @onclick="CloseEverythingElse">Close Panel</button>
+</div>
+
+@if (_displays.Any())
+{
+    <div class="card p-3 mt-4 bg-dark text-light" style="max-width: 600px;">
+        <h5 class="mb-3">Hardware Displays Detected</h5>
+        <ul class="mb-0">
+            @foreach (var display in _displays)
+            {
+                <li>
+                    <strong>@(display.IsPrimary ? "Primary:" : "Secondary:")</strong> 
+                    @display.Width x @display.Height (X: @display.X, Y: @display.Y)
+                </li>
+            }
+        </ul>
+    </div>
+}
 
 @code {
-
     private bool _isOpening;
+    private Guid _weatherWindowId = Guid.Empty;
+    private IReadOnlyList<Display> _displays = Array.Empty<Display>();
     
-    private async Task OpenSettings()
+    // Trackers for event cleanups
+    private WebViewWindow? _initWindowReference;
+    private WebViewWindow? _activeWeatherWindow;
+
+    protected override void OnInitialized()
+    {
+        _initWindowReference = new WebViewWindow();
+        _displays = _initWindowReference.Displays;
+        _initWindowReference.DisplaysChanged += RefreshDisplays;
+    }
+
+    private async Task OpenWeatherPanel()
     {
         _isOpening = true;
         StateHasChanged();
 
-        // Spawns an isolated UI thread displaying your /settings blazor route
         var weatherWindow = new WebViewWindow("Weather", 800, 600)
         {
             EnableDarkMode = true,
             BackgroundColor = System.Drawing.Color.FromArgb(255, 30, 30, 30),
-            UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "MainShell"),
-            ShowOnlyAfterLoad = true
+            UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "Secondary"),
+            ShowOnlyAfterLoad = true,
+            WindowState = WindowState.Normal
         };
 
-        await WindowManager.OpenAsync("/weather", weatherWindow);
+        await BootAndTrackWindow(weatherWindow);
+    }
+
+    private async Task LaunchBorderlessSecondary()
+    {
+        var secondaryDisplay = _displays.FirstOrDefault(d => !d.IsPrimary);
+        if (secondaryDisplay == null)
+        {
+            Console.WriteLine("No secondary display detected!");
+            return;
+        }
+
+        _isOpening = true;
+        StateHasChanged();
+
+        // Configure a borderless window that perfectly matches the secondary screen's dimensions and coordinates
+        var kioskWindow = new WebViewWindow("Weather Kiosk", secondaryDisplay.Width, secondaryDisplay.Height)
+        {
+            IsBorderless = true,
+            X = secondaryDisplay.X,
+            Y = secondaryDisplay.Y,
+            EnableDarkMode = true,
+            BackgroundColor = System.Drawing.Color.FromArgb(255, 10, 10, 10),
+            UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "Secondary"),
+            ShowOnlyAfterLoad = true,
+            WindowState = WindowState.Normal
+        };
+
+        await BootAndTrackWindow(kioskWindow);
+    }
+
+    private async Task BootAndTrackWindow(WebViewWindow window)
+    {
+        _activeWeatherWindow = window;
+        _activeWeatherWindow.DisplaysChanged += RefreshDisplays;
+
+        _activeWeatherWindow.Closed += () => 
+        {
+            if (_activeWeatherWindow != null) _activeWeatherWindow.DisplaysChanged -= RefreshDisplays;
+            _weatherWindowId = Guid.Empty;
+            InvokeAsync(StateHasChanged);
+        };
+
+        _weatherWindowId = await WindowManager.OpenAsync("/weather", window);
+        
         _isOpening = false;
         StateHasChanged();
     }
 
+    private void RefreshDisplays()
+    {
+        InvokeAsync(() =>
+        {
+            if (_activeWeatherWindow != null)
+            {
+                _displays = _activeWeatherWindow.Displays;
+            }
+            else if (_initWindowReference != null)
+            {
+                _displays = _initWindowReference.Displays;
+            }
+            
+            StateHasChanged();
+        });
+    }
+
+    private void MoveToSecondaryDisplay()
+    {
+        var window = WindowManager.GetWindow(_weatherWindowId);
+        if (window != null)
+        {
+            var secondaryDisplay = window.Displays.FirstOrDefault(d => !d.IsPrimary);
+            
+            if (secondaryDisplay != null)
+            {
+                var centeredX = secondaryDisplay.X + (secondaryDisplay.Width / 2) - (400); 
+                var centeredY = secondaryDisplay.Y + (secondaryDisplay.Height / 2) - 300; 
+                
+                window.WindowState = WindowState.Normal;
+                window.SetLocation(centeredX, centeredY);
+            }
+        }
+    }
+
+    private void MaximizeOnSecondaryDisplay()
+    {
+        var window = WindowManager.GetWindow(_weatherWindowId);
+        if (window != null)
+        {
+            var secondaryDisplay = window.Displays.FirstOrDefault(d => !d.IsPrimary);
+            
+            if (secondaryDisplay != null)
+            {
+                window.WindowState = WindowState.Normal; 
+                window.SetLocation(secondaryDisplay.X + 50, secondaryDisplay.Y + 50);
+                window.WindowState = WindowState.Maximized;
+            }
+        }
+    }
+
+    private void MaximizeOnPrimaryDisplay()
+    {
+        var window = WindowManager.GetWindow(_weatherWindowId);
+        if (window != null)
+        {
+            var primaryDisplay = window.Displays.FirstOrDefault(d => d.IsPrimary);
+            
+            if (primaryDisplay != null)
+            {
+                window.WindowState = WindowState.Normal; 
+                window.SetLocation(primaryDisplay.X + 50, primaryDisplay.Y + 50);
+                window.WindowState = WindowState.Maximized;
+            }
+        }
+    }
+
+    private void RestoreNormal()
+    {
+        var window = WindowManager.GetWindow(_weatherWindowId);
+        if (window != null) window.WindowState = WindowState.Normal;
+    }
+
+    private void MinimizeWeather()
+    {
+        var window = WindowManager.GetWindow(_weatherWindowId);
+        if (window != null) window.WindowState = WindowState.Minimized;
+    }
+
     private void CloseEverythingElse()
     {
-        // Instantly closes all secondary windows currently tracked
         WindowManager.CloseAllWindows();
+        
+        if (_activeWeatherWindow != null)
+        {
+            _activeWeatherWindow.DisplaysChanged -= RefreshDisplays;
+            _activeWeatherWindow = null;
+        }
+        
+        _weatherWindowId = Guid.Empty; 
+    }
+
+    public void Dispose()
+    {
+        if (_initWindowReference != null) _initWindowReference.DisplaysChanged -= RefreshDisplays;
+        if (_activeWeatherWindow != null) _activeWeatherWindow.DisplaysChanged -= RefreshDisplays;
     }
 }
