@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Drawing;
+using System.Net;
 using System.Runtime.InteropServices;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
@@ -21,11 +22,17 @@ public enum WindowState
 public class WebViewWindow(string title = "WebView Window", int width = 600, int height = 500)
 {
     public const uint WmSynchronizationcontextWorkAvailable = PInvoke.WM_USER + 1;
+
+    // --- Manual Macro Definitions skipped by CsWin32 ---
+    private static readonly HWND HWND_TOPMOST = new(-1);
+    private static readonly HWND HWND_NOTOPMOST = new(-2);
+
     private static readonly ConcurrentDictionary<HWND, WebViewWindow> WindowMap = new();
 
     private HWND _hwnd;
     private CoreWebView2Controller? _controller;
     private UiThreadSynchronizationContext? _uiThreadSyncCtx;
+    private readonly ConcurrentQueue<Action> _workQueue = new();
 
     private struct HostMapping
     {
@@ -44,6 +51,11 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     public bool ShowOnlyAfterLoad { get; set; } = false;
     public bool IsBorderless { get; set; } = false;
 
+    /// <summary>
+    /// Overrides the client browser signature. Must be set BEFORE the window is opened.
+    /// </summary>
+    public string? UserAgentOverride { get; set; }
+
     // --- NEW: Location and State ---
     public int? X { get; set; }
     public int? Y { get; set; }
@@ -57,6 +69,18 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         {
             _windowState = value;
             if (!_hwnd.IsNull) ApplyWindowState(); // Updates live window instantly
+        }
+    }
+
+    private bool _isTopMost;
+
+    public bool IsTopMost
+    {
+        get => _isTopMost;
+        set
+        {
+            _isTopMost = value;
+            if (!_hwnd.IsNull) ApplyTopMostState(); // Update live state instantly
         }
     }
 
@@ -101,6 +125,110 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             PInvoke.SetWindowPos(_hwnd, HWND.Null, x, y, 0, 0,
                 SET_WINDOW_POS_FLAGS.SWP_NOSIZE | SET_WINDOW_POS_FLAGS.SWP_NOZORDER);
         }
+    }
+
+    /// <summary>
+    /// Forces the window forward onto the desktop layer and assigns foreground focus.
+    /// </summary>
+    public void BringToFront()
+    {
+        if (!_hwnd.IsNull)
+        {
+            PInvoke.SetForegroundWindow(_hwnd);
+        }
+    }
+
+    /// <summary>
+    /// Forcefully purges local state, cookies, DOM storage, and network caching targets.
+    /// Useful for logging out users clean or wiping state.
+    /// </summary>
+    public Task ClearBrowsingDataAsync()
+    {
+        var tcs = new TaskCompletionSource();
+
+        if (_controller == null || _uiThreadSyncCtx == null)
+        {
+            tcs.SetResult();
+            return tcs.Task;
+        }
+
+        _uiThreadSyncCtx.Post(async _ =>
+        {
+            try
+            {
+                // CoreWebView2ClearBrowsingDataKinds.All Clear targets everything in the profile
+                await _controller.CoreWebView2.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.AllProfile);
+                tcs.SetResult();
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+        }, null);
+
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// Fetches all cookies for the current window's environment, regardless of URI.
+    /// </summary>
+    public Task<List<Cookie>> GetCookiesAsync(string? url = null)
+    {
+        var tcs = new TaskCompletionSource<List<Cookie>>();
+
+        // Simply enqueue the work. The message loop will grab it on the next cycle.
+        _workQueue.Enqueue(async () =>
+        {
+            try
+            {
+                if (_controller == null)
+                {
+                    tcs.SetResult(new List<Cookie>());
+                    return;
+                }
+
+                var wvCookies = await _controller.CoreWebView2.CookieManager.GetCookiesAsync(url);
+                var netCookies = new List<Cookie>();
+
+                foreach (var cookie in wvCookies)
+                {
+                    try
+                    {
+                        netCookies.Add(cookie.ToSystemNetCookie());
+                    }
+                    catch
+                    {
+                        // Ignore
+                    }
+                }
+                tcs.SetResult(netCookies);
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+        });
+
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// Generates a ready-to-use CookieContainer perfectly primed for use in an HttpClientHandler.
+    /// </summary>
+    public async Task<CookieContainer> GetCookieContainerAsync(string? url = null)
+    {
+        var cookies = await GetCookiesAsync(url);
+        var container = new CookieContainer();
+
+        foreach (var cookie in cookies)
+        {
+            // Skip cookies without domains to avoid CookieContainer validation crashes
+            if (string.IsNullOrEmpty(cookie.Domain)) continue;
+
+            container.Add(cookie);
+        }
+
+        return container;
     }
 
     public unsafe void ShowAndRun(string startUrl)
@@ -190,6 +318,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         if (!ShowOnlyAfterLoad)
         {
             ApplyWindowState();
+            if (IsTopMost) ApplyTopMostState();
         }
 
         _uiThreadSyncCtx = new UiThreadSynchronizationContext(_hwnd);
@@ -242,7 +371,11 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 {
                     displays.Add(new Display
                     {
-                        Bounds = new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top), WorkingArea = new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right - mi.rcWork.left, mi.rcWork.bottom - mi.rcWork.top), IsPrimary = (mi.dwFlags & 1) == 1 // MONITORINFOF_PRIMARY is exactly 1 natively
+                        Bounds = new Rectangle(mi.rcMonitor.left, mi.rcMonitor.top,
+                            mi.rcMonitor.right - mi.rcMonitor.left, mi.rcMonitor.bottom - mi.rcMonitor.top),
+                        WorkingArea = new Rectangle(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right - mi.rcWork.left,
+                            mi.rcWork.bottom - mi.rcWork.top),
+                        IsPrimary = (mi.dwFlags & 1) == 1 // MONITORINFOF_PRIMARY is exactly 1 natively
                     });
                 }
 
@@ -267,6 +400,14 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
         PInvoke.ShowWindow(_hwnd, cmd);
     }
 
+    private void ApplyTopMostState()
+    {
+        var placementFlags = SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE;
+        var insertAfterTarget = _isTopMost ? HWND_TOPMOST : HWND_NOTOPMOST;
+
+        PInvoke.SetWindowPos(_hwnd, insertAfterTarget, 0, 0, 0, 0, placementFlags);
+    }
+
     private static LRESULT StaticWndProc(HWND hwnd, uint msg, WPARAM wParam, LPARAM lParam)
     {
         if (WindowMap.TryGetValue(hwnd, out var instance)) return instance.HandleMessage(msg, wParam, lParam);
@@ -275,6 +416,11 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
 
     private LRESULT HandleMessage(uint msg, WPARAM wParam, LPARAM lParam)
     {
+        while (_workQueue.TryDequeue(out var action))
+        {
+            action();
+        }
+
         switch (msg)
         {
             case PInvoke.WM_SIZE:
@@ -286,11 +432,11 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             case WmSynchronizationcontextWorkAvailable:
                 _uiThreadSyncCtx?.RunAvailableWorkOnCurrentThread();
                 break;
-            
+
             case PInvoke.WM_DISPLAYCHANGE:
                 DisplaysChanged?.Invoke();
                 break;
-            
+
             case PInvoke.WM_CLOSE:
                 try
                 {
@@ -369,7 +515,15 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             s.IsPinchZoomEnabled = Options.IsPinchZoomEnabled;
             s.IsSwipeNavigationEnabled = Options.IsSwipeNavigationEnabled;
 
-            s.UserAgent = s.UserAgent + (Options.IsGestureAutoplayBlocked ? " BlockGestureAutoplay" : "");
+            // Apply custom UserAgent if provided
+            if (!string.IsNullOrEmpty(UserAgentOverride))
+            {
+                s.UserAgent = UserAgentOverride;
+            }
+            else
+            {
+                s.UserAgent = s.UserAgent + (Options.IsGestureAutoplayBlocked ? " BlockGestureAutoplay" : "");
+            }
 
             _controller.CoreWebView2.WebMessageReceived += (_, e) =>
             {
@@ -381,7 +535,8 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             {
                 if (ShowOnlyAfterLoad)
                 {
-                    ApplyWindowState(); // Apply proper state on load instead of SW_NORMAL blindly
+                    ApplyWindowState();
+                    if (IsTopMost) ApplyTopMostState(); // Ensure sticky pinning stays true after delayed load
                     PInvoke.UpdateWindow(_hwnd);
                 }
 

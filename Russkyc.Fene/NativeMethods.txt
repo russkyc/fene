@@ -49,3 +49,7 @@ WM_DISPLAYCHANGE
 EnumDisplayMonitors
 GetMonitorInfo
 MONITORINFO
+
+HWND_TOPMOST
+HWND_NOTOPMOST
+SetForegroundWindow
