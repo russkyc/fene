@@ -1,6 +1,7 @@
 bin/
 obj/
 [Pp]ublish/
+[Rr]eleases/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
