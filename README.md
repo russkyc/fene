@@ -304,6 +304,42 @@ productionShell.DisplaysChanged += () =>
 
 ```
 
+### Native Platform Utilities (`Platform` Class)
+
+Since Fene skips heavyweight UI frameworks, the `Platform` utility class leverages native COM interop to provide fast, zero-dependency access to native Windows shell dialogs and system information.
+
+```csharp
+// 1. Single File Picker
+string? selectedImage = Platform.ShowOpenFileDialog(
+    title: "Select Profile Picture", 
+    filter: "Image Files|*.png;*.jpg|All Files|*.*"
+);
+
+// 2. Multi-File Picker
+string[] documents = Platform.ShowOpenMultipleFilesDialog(
+    title: "Upload Documents",
+    filter: "PDF Files|*.pdf"
+);
+
+// 3. Save File Picker
+string? saveDestination = Platform.ShowSaveFileDialog(
+    title: "Save Report",
+    filter: "CSV Files|*.csv",
+    defaultExtension: ".csv"
+);
+
+// 4. Folder Selection Dialog
+string? exportPath = Platform.ShowFolderBrowserDialog("Choose Export Destination");
+
+// 5. Query System Fonts (Zero-Dependency via Registry)
+IEnumerable<string> installedFonts = Platform.GetInstalledFonts();
+foreach (var font in installedFonts)
+{
+    Console.WriteLine($"Available font: {font}");
+}
+
+```
+
 ### State Cleansing & Engine Events
 
 Track navigation steps and purge saved state records programmatically.
@@ -426,9 +462,18 @@ public async Task ExtractAndFetchSecurePayloadAsync()
 | `GetCookiesAsync(string uri)` | Returns an active system-net compatible cookie list. |
 | `GetCookieContainerAsync(string uri)` | Builds an active `CookieContainer` for network requests. |
 
+### `Platform`
+
+| Method | Description |
+| --- | --- |
+| `ShowOpenFileDialog(title, filter, owner)` | Opens native Win32 `IFileOpenDialog` for a single file. Returns selected path or null. |
+| `ShowOpenMultipleFilesDialog(title, filter, owner)` | Opens native Win32 `IFileOpenDialog` configured for multiple files. Returns array of paths. |
+| `ShowSaveFileDialog(title, filter, defaultExt, owner)` | Opens native Win32 `IFileSaveDialog` for exporting data. Returns destination path or null. |
+| `ShowFolderBrowserDialog(title, owner)` | Opens native Win32 `IFileOpenDialog` constrained to directories only. Returns folder path or null. |
+| `GetInstalledFonts()` | Retrieves system-installed fonts directly from the registry without heavyweight drawing dependencies. |
+
 ---
 
 ## 📜 License
 
 Copyright © 2026 JOHN RUSSELL CAMO.
-Released under the MIT License.

@@ -53,3 +53,13 @@ MONITORINFO
 HWND_TOPMOST
 HWND_NOTOPMOST
 SetForegroundWindow
+
+IFileDialog
+IFileOpenDialog
+IFileSaveDialog
+IShellItem
+IShellItemArray
+SIGDN
+FILEOPENDIALOGOPTIONS
+COMDLG_FILTERSPEC
+CoTaskMemFree

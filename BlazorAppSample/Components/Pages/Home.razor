@@ -1,7 +1,166 @@
 ﻿@page "/"
+@using Russkyc.Fene
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Fene Platform Demos</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="container pb-4">
+    <h1 class="mb-4">Native Win32 Utilities</h1>
+    <p class="lead mb-4">Zero-dependency, native Windows dialogs triggered directly from Blazor.</p>
 
-Welcome to your new app.
+    <div class="row g-4">
+        
+        <!-- Open Single File Demo -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Open File</h5>
+                    <p class="card-text text-muted small">Triggers the native <code>IFileOpenDialog</code> for a single selection.</p>
+                    <button class="btn btn-primary" @onclick="PickSingleFile">Select File</button>
+                    
+                    @if (!string.IsNullOrEmpty(_singleFilePath))
+                    {
+                        <div class="alert alert-success mt-3 mb-0 text-truncate" title="@_singleFilePath">
+                            <strong>Selected:</strong> @_singleFilePath
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Open Multiple Files Demo -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Open Multiple Files</h5>
+                    <p class="card-text text-muted small">Triggers the native dialog with <code>FOS_ALLOWMULTISELECT</code>.</p>
+                    <button class="btn btn-primary" @onclick="PickMultiFile">Select Files</button>
+                    
+                    @if (_multiFilePaths != null && _multiFilePaths.Length > 0)
+                    {
+                        <div class="alert alert-info mt-3 mb-0" style="max-height: 120px; overflow-y: auto;">
+                            <strong>Selected (@_multiFilePaths.Length):</strong>
+                            <ul class="mb-0 ps-3">
+                                @foreach (var path in _multiFilePaths)
+                                {
+                                    <li class="text-truncate" title="@path">@path</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Save File Demo -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Save File</h5>
+                    <p class="card-text text-muted small">Triggers the native <code>IFileSaveDialog</code> to request a destination path.</p>
+                    <button class="btn btn-primary" @onclick="PickSaveFile">Save File</button>
+                    
+                    @if (!string.IsNullOrEmpty(_saveFilePath))
+                    {
+                        <div class="alert alert-warning mt-3 mb-0 text-truncate" title="@_saveFilePath">
+                            <strong>Destination:</strong> @_saveFilePath
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Select Folder Demo -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Select Folder</h5>
+                    <p class="card-text text-muted small">Triggers the native dialog restricted to directory selection only.</p>
+                    <button class="btn btn-primary" @onclick="PickFolder">Select Folder</button>
+                    
+                    @if (!string.IsNullOrEmpty(_folderPath))
+                    {
+                        <div class="alert alert-secondary mt-3 mb-0 text-truncate" title="@_folderPath">
+                            <strong>Directory:</strong> @_folderPath
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- System Fonts Demo -->
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="card-title mb-0">System Fonts</h5>
+                            <p class="card-text text-muted small mb-0">Queries the Windows Registry for installed font families.</p>
+                        </div>
+                        <button class="btn btn-primary" @onclick="LoadFonts">Fetch Fonts</button>
+                    </div>
+
+                    @if (_fonts != null)
+                    {
+                        <div class="border rounded p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var font in _fonts)
+                                {
+                                    <span class="badge bg-dark text-light" style="font-family: '@font', sans-serif;">
+                                        @font
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private string? _singleFilePath;
+    private string[]? _multiFilePaths;
+    private string? _saveFilePath;
+    private string? _folderPath;
+    private IEnumerable<string>? _fonts;
+
+    private void PickSingleFile()
+    {
+        _singleFilePath = Platform.ShowOpenFileDialog(
+            title: "Select a Document", 
+            filter: "Text Files|*.txt|All Files|*.*"
+        );
+    }
+
+    private void PickMultiFile()
+    {
+        _multiFilePaths = Platform.ShowOpenMultipleFilesDialog(
+            title: "Select Multiple Images", 
+            filter: "Images|*.png;*.jpg;*.jpeg|All Files|*.*"
+        );
+    }
+
+    private void PickSaveFile()
+    {
+        _saveFilePath = Platform.ShowSaveFileDialog(
+            title: "Export Data", 
+            filter: "CSV Files|*.csv|JSON Files|*.json", 
+            defaultExtension: ".csv"
+        );
+    }
+
+    private void PickFolder()
+    {
+        _folderPath = Platform.ShowFolderBrowserDialog(
+            title: "Select Workspace Directory"
+        );
+    }
+
+    private void LoadFonts()
+    {
+        // Load fonts only when requested to demonstrate the utility
+        _fonts = Platform.GetInstalledFonts();
+    }
+}
