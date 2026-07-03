@@ -72,7 +72,7 @@ public class WindowManager
     /// Spawns a new native window and waits asynchronously until the user CLOSES it.
     /// Used for the traditional Dialog/Modal pattern.
     /// </summary>
-    public Task ShowDialogAsync(string path, WebViewWindow window)
+    public Task ShowDialogAsync(string path, WebViewWindow window, bool external = false)
     {
         var tcs = new TaskCompletionSource();
         var windowId = Guid.NewGuid();
@@ -88,7 +88,7 @@ public class WindowManager
 
         var uiThread = new Thread(() =>
         {
-            string targetUrl = path.StartsWith("http://") || path.StartsWith("https://")
+            var targetUrl = external ? path : path.StartsWith("http://") || path.StartsWith("https://")
                 ? path
                 : $"{_baseUrl}/{path.TrimStart('/')}";
 
