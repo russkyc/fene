@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="BlazorAppSample/BlazorAppSample.csproj" />
+  <Project Path="MinimalSample/MinimalSample.csproj" />
+  <Project Path="Russkyc.Fene/Russkyc.Fene.csproj" />
+</Solution>

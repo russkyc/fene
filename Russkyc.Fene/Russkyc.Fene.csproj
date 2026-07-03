@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>true</ImplicitUsings>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+        <NoWarn>CA1416;MSB3277</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Remove="NativeMethods.txt" />
+        <AdditionalFiles Include="NativeMethods.txt" />
+    </ItemGroup>
+
+    <!-- INJECT THE TARGETS FILE FOR CONSUMERS -->
+    <ItemGroup>
+        <None Include="build\Russkyc.Fene.targets" Pack="true" PackagePath="build\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" Version="2.2.8" />
+        <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4022.49"/>
+        <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.298">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+
+</Project>

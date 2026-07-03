@@ -1,0 +1,36 @@
+﻿@page "/counter"
+@using Russkyc.Fene
+@inject WindowManager WindowManager
+
+<button disabled="@_isOpening" class="btn btn-primary" @onclick="OpenSettings">Open Settings Panel</button>
+<button class="btn btn-danger" @onclick="CloseEverythingElse">Close Secondary Windows</button>
+
+@code {
+
+    private bool _isOpening;
+    
+    private async Task OpenSettings()
+    {
+        _isOpening = true;
+        StateHasChanged();
+
+        // Spawns an isolated UI thread displaying your /settings blazor route
+        var weatherWindow = new WebViewWindow("Weather", 800, 600)
+        {
+            EnableDarkMode = true,
+            BackgroundColor = System.Drawing.Color.FromArgb(255, 30, 30, 30),
+            UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "MainShell"),
+            ShowOnlyAfterLoad = true
+        };
+
+        await WindowManager.OpenAsync("/weather", weatherWindow);
+        _isOpening = false;
+        StateHasChanged();
+    }
+
+    private void CloseEverythingElse()
+    {
+        // Instantly closes all secondary windows currently tracked
+        WindowManager.CloseAllWindows();
+    }
+}
