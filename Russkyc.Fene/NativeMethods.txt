@@ -33,6 +33,7 @@ AllocConsole
 
 MessageBox
 
+DwmExtendFrameIntoClientArea
 DwmSetWindowAttribute
 DWMWINDOWATTRIBUTE
 LoadImage

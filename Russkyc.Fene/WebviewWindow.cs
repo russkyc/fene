@@ -8,6 +8,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Dwm;
 using Windows.Win32.Graphics.Gdi;
+using Windows.Win32.UI.Controls;
 using Windows.Win32.UI.HiDpi;
 using Windows.Win32.UI.WindowsAndMessaging;
 
@@ -26,6 +27,8 @@ public class WebViewWindow(
     public const uint WmSynchronizationcontextWorkAvailable = PInvoke.WM_USER + 1;
     public const uint WmProcessWorkQueue = PInvoke.WM_USER + 2;
     private const uint WmGetMinMaxInfo = 0x0024; // Native Win32 constant for window sizing constraints
+    private const uint WmNcCalcSize = 0x0083;
+    private const uint WmNcHitTest = 0x0084;
 
     private static readonly HWND HWND_TOPMOST = new(-1);
     private static readonly HWND HWND_NOTOPMOST = new(-2);
@@ -377,7 +380,9 @@ public class WebViewWindow(
             }
         }
 
-        var style = IsBorderless ? WINDOW_STYLE.WS_POPUP : WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
+        // Both window frames use OVERLAPPEDWINDOW structurally to retain native drop shadows, 
+        // aero snapping, and window minimize/maximize animations under the hood.
+        var style = WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
         IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
 
         fixed (char* windowNamePtr = title)
@@ -426,7 +431,19 @@ public class WebViewWindow(
             ApplyWindowState();
             if (IsTopMost) ApplyTopMostState();
         }
+        if (IsBorderless)
+        {
+            // Extend the bottom margin by 1 pixel. This triggers the Desktop Window Manager (DWM)
+            // to compose native drop-shadows and corner-rounding layouts manually around our window frame.
+            var margins = new MARGINS { cxLeftWidth = 0, cxRightWidth = 0, cyTopHeight = 0, cyBottomHeight = 1 };
+            PInvoke.DwmExtendFrameIntoClientArea(_hwnd, &margins);
 
+            // Forces Win32 to issue an active WM_NCCALCSIZE frame recalculation pass immediately
+            PInvoke.SetWindowPos(_hwnd, HWND.Null, 0, 0, 0, 0,
+                SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER |
+                SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED);
+        }
         _uiThreadSyncCtx = new UiThreadSynchronizationContext(_hwnd);
         SynchronizationContext.SetSynchronizationContext(_uiThreadSyncCtx);
 
@@ -518,6 +535,47 @@ public class WebViewWindow(
     {
         switch (msg)
         {
+            case WmNcCalcSize:
+                if (IsBorderless)
+                {
+                    // Returning 0 when wParam is TRUE expands our client view to occupy 100% of the window size,
+                    // effectively rendering over the native title bar while keeping the drop shadow intact.
+                    if (wParam.Value != 0) return default;
+                }
+                break;
+            case WmNcHitTest:
+                if (IsBorderless)
+                {
+                    // 1. Unpack absolute screen space mouse coordinates from lParam
+                    int x = unchecked((short)(uint)lParam.Value);
+                    int y = unchecked((short)((uint)lParam.Value >> 16));
+
+                    // 2. Transcribe to local coordinates relative to the window boundaries
+                    PInvoke.GetWindowRect(_hwnd, out var rect);
+                    var localX = x - rect.left;
+                    var localY = y - rect.top;
+                    var width = rect.right - rect.left;
+                    var height = rect.bottom - rect.top;
+
+                    const int borderThickness = 6;
+
+                    // Evaluate Window Corner Zones first to resolve diagonal resizing
+                    if (localX < borderThickness && localY < borderThickness) return (LRESULT)13; // HTTOPLEFT
+                    if (localX > width - borderThickness && localY < borderThickness) return (LRESULT)14; // HTTOPRIGHT
+                    if (localX < borderThickness && localY > height - borderThickness) return (LRESULT)16; // HTBOTTOMLEFT
+                    if (localX > width - borderThickness && localY > height - borderThickness) return (LRESULT)17; // HTBOTTOMRIGHT
+
+                    // Evaluate Window Edge Borders for structural resizing directional adjustments
+                    if (localY < borderThickness) return (LRESULT)12; // HTTOP
+                    if (localY > height - borderThickness) return (LRESULT)15; // HTBOTTOM
+                    if (localX < borderThickness) return (LRESULT)10; // HTLEFT
+                    if (localX > width - borderThickness) return (LRESULT)11; // HTRIGHT
+
+                    // Return HTCLIENT and let WebView2's native engine handle the title bar dragging regions
+                    // based on CSS 'app-region: drag' markings!
+                    return (LRESULT)1;
+                }
+                break;
             case WmGetMinMaxInfo:
                 if (MinWidth.HasValue || MinHeight.HasValue)
                 {
@@ -635,6 +693,17 @@ public class WebViewWindow(
                 _controller.CoreWebView2.Profile.PreferredColorScheme = CoreWebView2PreferredColorScheme.Dark;
 
             var s = _controller.CoreWebView2.Settings;
+            
+            // Natively pass HTML app-region attributes straight to Win32 hit-testing mechanics
+            try
+            {
+                s.IsNonClientRegionSupportEnabled = true;
+            }
+            catch (NotSupportedException)
+            {
+                // Fallback for systems running older WebView2 runtimes where the API isn't present
+            }
+            
             s.AreDevToolsEnabled = Options.AreDevToolsEnabled;
             s.IsScriptEnabled = Options.IsScriptEnabled;
             s.IsWebMessageEnabled = Options.IsWebMessageEnabled;
