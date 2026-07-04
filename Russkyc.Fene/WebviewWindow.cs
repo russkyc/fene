@@ -62,6 +62,7 @@ public class WebViewWindow(
 
     private readonly List<HostMapping> _mappings = new();
 
+    public WindowStartPosition StartPosition { get; set; } = WindowStartPosition.OSDefault;
     public Color BackgroundColor { get; set; } = Color.Transparent;
     public bool EnableDarkMode { get; set; } = false;
     public string? IconPath { get; set; } = null;
@@ -308,11 +309,36 @@ public class WebViewWindow(
             if (PInvoke.RegisterClass(wc) == 0) throw new Exception("Win32 class registration failed.");
         }
 
-        // --- UPDATED LAYOUT DIMENSIONS FOR OS FALLBACKS ---
-        var startX = X ?? PInvoke.CW_USEDEFAULT;
-        var startY = Y ?? PInvoke.CW_USEDEFAULT;
+        // 1. Establish default layout choices
+        var startX = PInvoke.CW_USEDEFAULT;
+        var startY = PInvoke.CW_USEDEFAULT;
         var startWidth = Width ?? PInvoke.CW_USEDEFAULT;
         var startHeight = Height ?? PInvoke.CW_USEDEFAULT;
+
+        // 2. If dimensions are explicitly defined, calculate requested positions
+        if (Width.HasValue && Height.HasValue)
+        {
+            if (StartPosition == WindowStartPosition.CenterScreen)
+            {
+                int screenWidth = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXSCREEN);
+                int screenHeight = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYSCREEN);
+                startX = (screenWidth - Width.Value) / 2;
+                startY = (screenHeight - Height.Value) / 2;
+            }
+            else if (StartPosition == WindowStartPosition.CenterOwner && owner != null)
+            {
+                PInvoke.GetWindowRect(new HWND(owner.Handle), out var ownerRect);
+                int ownerWidth = ownerRect.right - ownerRect.left;
+                int ownerHeight = ownerRect.bottom - ownerRect.top;
+                startX = ownerRect.left + (ownerWidth - Width.Value) / 2;
+                startY = ownerRect.top + (ownerHeight - Height.Value) / 2;
+            }
+            else if (X.HasValue && Y.HasValue)
+            {
+                startX = X.Value;
+                startY = Y.Value;
+            }
+        }
 
         var style = IsBorderless ? WINDOW_STYLE.WS_POPUP : WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
         IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;

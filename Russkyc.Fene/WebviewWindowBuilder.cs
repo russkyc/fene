@@ -12,11 +12,12 @@ public sealed class WebViewWindowBuilder
     private int? _minHeight;
     private int? _x;
     private int? _y;
+    private WindowStartPosition _startPosition = WindowStartPosition.OSDefault;
     private Color _backgroundColor = Color.Transparent;
     private bool _enableDarkMode;
     private string? _iconPath;
     private string? _userDataFolder;
-    private bool _showOnlyAfterLoad;
+    private bool _showOnlyAfterLoad = true;
     private bool _isBorderless;
     private string? _userAgentOverride;
     private WindowState _windowState = WindowState.Normal;
@@ -32,17 +33,20 @@ public sealed class WebViewWindowBuilder
         _height = height;
     }
 
-    /// <summary>
-    /// Initializes a fluid builder instance. If width and height are omitted, Windows OS sizing defaults are leveraged.
-    /// </summary>
     public static WebViewWindowBuilder Create(string title = "WebView Window", int? width = null, int? height = null)
     {
         return new WebViewWindowBuilder(title, width, height);
     }
+    
+    public WebViewWindow BuildKiosk()
+    {
+        _isBorderless = true;
+        _isTopMost = true;
+        _showOnlyAfterLoad = true;
+        _windowState = WindowState.Maximized;
+        return Build();
+    }
 
-    /// <summary>
-    /// Sets explicit execution bounds for the target window interface.
-    /// </summary>
     public WebViewWindowBuilder WithSize(int width, int height)
     {
         _width = width;
@@ -59,8 +63,15 @@ public sealed class WebViewWindowBuilder
 
     public WebViewWindowBuilder WithPosition(int x, int y)
     {
+        _startPosition = WindowStartPosition.OSDefault; // Manual overrides bypass generic presets
         _x = x;
         _y = y;
+        return this;
+    }
+
+    public WebViewWindowBuilder WithStartPosition(WindowStartPosition startPosition)
+    {
+        _startPosition = startPosition;
         return this;
     }
 
@@ -130,15 +141,13 @@ public sealed class WebViewWindowBuilder
         return this;
     }
 
-    /// <summary>
-    /// Builds the configuration and outputs a completely ready WebViewWindow instance.
-    /// </summary>
     public WebViewWindow Build()
     {
         var window = new WebViewWindow(_title, _width, _height, _minWidth, _minHeight)
         {
             X = _x,
             Y = _y,
+            StartPosition = _startPosition,
             BackgroundColor = _backgroundColor,
             EnableDarkMode = _enableDarkMode,
             IconPath = _iconPath,

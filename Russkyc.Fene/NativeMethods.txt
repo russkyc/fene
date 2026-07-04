@@ -54,6 +54,8 @@ HWND_TOPMOST
 HWND_NOTOPMOST
 SetForegroundWindow
 EnableWindow
+GetWindowRect
+GetSystemMetrics
 
 IFileDialog
 IFileOpenDialog

@@ -135,7 +135,6 @@
         
         var googleWindow = WebViewWindowBuilder.Create("Google Container", 1000, 700)
             .UseDarkMode()
-            .ShowOnlyAfterLoad()
             .WithUserDataFolder(WindowManager.MainWindow.UserDataFolder)
             .Build();
 
@@ -167,7 +166,6 @@
 
         var weatherWindow = WebViewWindowBuilder.Create("Weather")
             .UseDarkMode()
-            .ShowOnlyAfterLoad()
             .WithUserDataFolder(WindowManager.MainWindow.UserDataFolder)
             .WithInitialState(WindowState.Normal)
             .Build();
@@ -188,7 +186,6 @@
         StateHasChanged();
 
         var kioskWindow = WebViewWindowBuilder.Create("Weather Kiosk", secondaryDisplay.Bounds.Width, secondaryDisplay.Bounds.Height)
-            .ShowOnlyAfterLoad()
             .WithBackgroundColor(System.Drawing.Color.FromArgb(255, 10, 10, 10))
             .UseDarkMode()
             .WithUserDataFolder(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "Secondary"))

@@ -12,7 +12,7 @@ public static class DesktopExtensions
         return serviceCollection;
     }
     
-    public static void RunAsDesktopWindow(this WebApplication app, string initialPath, WebViewWindow mainWindow)
+    public static void RunDesktop(this WebApplication app, WebViewWindow mainWindow, string initialPath = "/")
     {
         StaticWebAssetsLoader.UseStaticWebAssets(app.Environment, app.Configuration);
         
