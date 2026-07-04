@@ -12,4 +12,8 @@
         <NoWarn>CA1416;MSB3277</NoWarn>
     </PropertyGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\Russkyc.Fene\Russkyc.Fene.csproj" />
+    </ItemGroup>
+
 </Project>
