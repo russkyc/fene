@@ -56,6 +56,16 @@ window.OnWebMessageReceived<WebMessage>(async message =>
     }
 });
 
+window.ClosingAsync = () =>
+{
+    var confirmClose = Platform.ShowConfirmationBox(
+        "You are about to exit the application, are you sure?", 
+        "Exit Confirmation",
+        owner: window
+    );
+    return Task.FromResult(confirmClose);
+};
+
 windowManager.RunDesktop(window, "http://app.local/index.html");
 
 // Minimal webmessage wrapper

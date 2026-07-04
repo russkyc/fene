@@ -254,7 +254,29 @@ public static class Platform
             );
         }
     }
+    
+    /// <summary>
+    /// Triggers a native Win32 message box with Yes/No choices. 
+    /// Returns true if the user chooses 'Yes', false otherwise.
+    /// </summary>
+    public static unsafe bool ShowConfirmationBox(string message, string title = "Confirm Exit", WebViewWindow? owner = null)
+    {
+        var style = MESSAGEBOX_STYLE.MB_YESNO | MESSAGEBOX_STYLE.MB_ICONQUESTION;
 
+        fixed (char* pMsg = message)
+        fixed (char* pTitle = title)
+        {
+            MESSAGEBOX_RESULT result = PInvoke.MessageBox(
+                new HWND(owner?.Handle ?? IntPtr.Zero),
+                new PCWSTR(pMsg),
+                new PCWSTR(pTitle),
+                style
+            );
+
+            return result == MESSAGEBOX_RESULT.IDYES;
+        }
+    }
+    
     private static unsafe void ApplyFilter(IFileDialog dialog, string filter)
     {
         if (string.IsNullOrWhiteSpace(filter)) return;

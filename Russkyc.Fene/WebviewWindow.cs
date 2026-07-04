@@ -62,7 +62,8 @@ public class WebViewWindow(
         public string FolderPath { get; set; }
         public HostResourceAccessKind AccessKind { get; set; }
     }
-
+    
+    private bool _isClosingApproved;
     private readonly List<HostMapping> _mappings = new();
 
     public WindowStartPosition StartPosition { get; set; } = WindowStartPosition.OSDefault;
@@ -120,6 +121,8 @@ public class WebViewWindow(
     public event Action<string>? NavigationCompleted;
     public event Action? Closed;
     public event Action? DisplaysChanged;
+    
+    public Func<Task<bool>>? ClosingAsync { get; set; }
 
     public void MapVirtualHost(string hostName, string folderPath, HostResourceAccessKind accessKind)
     {
@@ -553,6 +556,13 @@ public class WebViewWindow(
                 break;
 
             case PInvoke.WM_CLOSE:
+                // If there's an async hook registered and it hasn't approved the close yet, intercept it.
+                if (ClosingAsync != null && !_isClosingApproved)
+                {
+                    _ = EvaluateClosingAsync();
+                    return default; // Handled: Prevents the window from closing right now
+                }
+
                 try
                 {
                     _controller?.Close();
@@ -710,6 +720,31 @@ public class WebViewWindow(
             PInvoke.MessageBox(_hwnd, $"WebView2 Exception: {ex.Message}", "Critical Failure",
                 MESSAGEBOX_STYLE.MB_OK | MESSAGEBOX_STYLE.MB_ICONERROR);
             Environment.Exit(1);
+        }
+    }
+    
+    private async Task EvaluateClosingAsync()
+    {
+        if (ClosingAsync == null) return;
+
+        try
+        {
+            // Execute the consumer's async check (e.g., showing a web dialog or checking unsaved state)
+            bool shouldClose = await ClosingAsync();
+            
+            if (shouldClose)
+            {
+                _isClosingApproved = true;
+                // Post the close message back to the queue to re-enter safely on the next loop cycle
+                PInvoke.PostMessage(_hwnd, PInvoke.WM_CLOSE, 0, 0);
+            }
+        }
+        catch (Exception)
+        {
+            // Fallback: If the hook crashes, you can choose to force close or swallow.
+            // For safety, we force allow close here, but adapt as your error policy dictates:
+            _isClosingApproved = true;
+            PInvoke.PostMessage(_hwnd, PInvoke.WM_CLOSE, 0, 0);
         }
     }
 }
