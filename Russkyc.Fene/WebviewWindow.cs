@@ -14,12 +14,17 @@ namespace Russkyc.Fene;
 /// <summary>
 /// Represents a native window hosting a WebView2 control.
 /// </summary>
-public class WebViewWindow(string title = "WebView Window", int width = 600, int height = 500, int? minWidth = null, int? minHeight = null)
+public class WebViewWindow(
+    string title = "WebView Window",
+    int? width = null,
+    int? height = null,
+    int? minWidth = null,
+    int? minHeight = null)
 {
     public const uint WmSynchronizationcontextWorkAvailable = PInvoke.WM_USER + 1;
     public const uint WmProcessWorkQueue = PInvoke.WM_USER + 2;
     private const uint WmGetMinMaxInfo = 0x0024; // Native Win32 constant for window sizing constraints
-    
+
     private static readonly HWND HWND_TOPMOST = new(-1);
     private static readonly HWND HWND_NOTOPMOST = new(-2);
 
@@ -64,9 +69,11 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     public bool ShowOnlyAfterLoad { get; set; } = false;
     public bool IsBorderless { get; set; } = false;
 
+    public int? Width { get; set; } = width;
+    public int? Height { get; set; } = height;
     public int? MinWidth { get; set; } = minWidth;
     public int? MinHeight { get; set; } = minHeight;
-    
+
     /// <summary>
     /// Gets or sets the custom User-Agent string for this window.
     /// </summary>
@@ -76,7 +83,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     public int? Y { get; set; }
 
     public unsafe IntPtr Handle => (IntPtr)_hwnd.Value;
-    
+
     private WindowState _windowState = WindowState.Normal;
 
     public WindowState WindowState
@@ -88,8 +95,9 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             if (!_hwnd.IsNull) ApplyWindowState();
         }
     }
-    
+
     private bool _isTopMost;
+
     public bool IsTopMost
     {
         get => _isTopMost;
@@ -99,7 +107,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             if (!_hwnd.IsNull) ApplyTopMostState();
         }
     }
-    
+
     public WebViewSettingsOptions Options { get; } = new();
 
     public event Action<string>? WebMessageReceived;
@@ -183,7 +191,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     private void EnqueueWork(Action action)
     {
         _workQueue.Enqueue(action);
-        
+
         if (!_hwnd.IsNull)
         {
             PInvoke.PostMessage(_hwnd, WmProcessWorkQueue, 0, 0);
@@ -208,13 +216,13 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 }
 
                 var targetUri = string.IsNullOrEmpty(uri) ? _controller.CoreWebView2.Source : uri;
-                
+
                 var wvCookies = await _controller.CoreWebView2.CookieManager.GetCookiesAsync(targetUri);
                 var netCookies = new List<Cookie>();
 
                 foreach (var wvCookie in wvCookies)
                 {
-                    try 
+                    try
                     {
                         netCookies.Add(wvCookie.ToSystemNetCookie());
                     }
@@ -300,28 +308,30 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             if (PInvoke.RegisterClass(wc) == 0) throw new Exception("Win32 class registration failed.");
         }
 
+        // --- UPDATED LAYOUT DIMENSIONS FOR OS FALLBACKS ---
         var startX = X ?? PInvoke.CW_USEDEFAULT;
         var startY = Y ?? PInvoke.CW_USEDEFAULT;
+        var startWidth = Width ?? PInvoke.CW_USEDEFAULT;
+        var startHeight = Height ?? PInvoke.CW_USEDEFAULT;
 
         var style = IsBorderless ? WINDOW_STYLE.WS_POPUP : WINDOW_STYLE.WS_OVERLAPPEDWINDOW;
-        
         IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
 
         fixed (char* windowNamePtr = title)
         fixed (char* classNamePtr = className)
         {
             _hwnd = PInvoke.CreateWindowEx(
-                0, 
-                classNamePtr, 
-                windowNamePtr, 
-                style, 
-                startX, 
-                startY, 
-                width, 
-                height, 
-                new HWND(ownerHandle), 
-                default, 
-                hInstance, 
+                0,
+                classNamePtr,
+                windowNamePtr,
+                style,
+                startX,
+                startY,
+                startWidth,
+                startHeight,
+                new HWND(ownerHandle),
+                default,
+                hInstance,
                 null);
         }
 
@@ -431,7 +441,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
     {
         var placementFlags = SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE;
         var insertAfterTarget = _isTopMost ? HWND_TOPMOST : HWND_NOTOPMOST;
-        
+
         PInvoke.SetWindowPos(_hwnd, insertAfterTarget, 0, 0, 0, 0, placementFlags);
     }
 
@@ -454,8 +464,10 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                         if (MinWidth.HasValue) mmi->ptMinTrackSize.X = MinWidth.Value;
                         if (MinHeight.HasValue) mmi->ptMinTrackSize.Y = MinHeight.Value;
                     }
+
                     return default;
                 }
+
                 break;
 
             case WmProcessWorkQueue:
@@ -463,6 +475,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                 {
                     action();
                 }
+
                 return default;
 
             case PInvoke.WM_SIZE:
@@ -568,7 +581,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
             {
                 s.UserAgent = s.UserAgent + (Options.IsGestureAutoplayBlocked ? " BlockGestureAutoplay" : "");
             }
-            
+
             if (Options.AutomaticallyAllowAllPermissions)
             {
                 _controller.CoreWebView2.PermissionRequested += (_, e) =>
@@ -576,7 +589,7 @@ public class WebViewWindow(string title = "WebView Window", int width = 600, int
                     e.State = CoreWebView2PermissionState.Allow;
                 };
             }
-            
+
             if (Options.PreventDragAndDropNavigation)
             {
                 await _controller.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(

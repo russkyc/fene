@@ -26,12 +26,13 @@ app.MapRazorComponents<App>()
 
 app.MapFeneFontsApi();
 
-var mainWindow = new WebViewWindow("Blazor App Sample", 1200, 800, 1200, 800)
-{
-    EnableDarkMode = true,
-    BackgroundColor = Color.FromArgb(255, 30, 30, 30),
-    UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "MainShell"),
-    ShowOnlyAfterLoad = true
-};
+var mainWindow = WebViewWindowBuilder
+    .Create("Blazor App Sample", 1200, 800)
+    .UseDarkMode()
+    .WithBackgroundColor(Color.FromArgb(255, 30, 30, 30))
+    .WithUserDataFolder(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "MainShell"))
+    .ShowOnlyAfterLoad()
+    .WithMinSize(1200, 800)
+    .Build();
 
 app.RunAsDesktopWindow(initialPath: "/", mainWindow);

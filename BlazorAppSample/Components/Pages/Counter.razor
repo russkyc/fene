@@ -128,15 +128,16 @@
 
     private async Task LaunchGoogleContainer()
     {
+        if (WindowManager.MainWindow?.UserDataFolder is null) return;
+        
         _isOpening = true;
         StateHasChanged();
-
-        var googleWindow = new WebViewWindow("Google Container", 1000, 700)
-        {
-            EnableDarkMode = true,
-            UserDataFolder = WindowManager.MainWindow!.UserDataFolder,
-            ShowOnlyAfterLoad = true
-        };
+        
+        var googleWindow = WebViewWindowBuilder.Create("Google Container", 1000, 700)
+            .UseDarkMode()
+            .ShowOnlyAfterLoad()
+            .WithUserDataFolder(WindowManager.MainWindow.UserDataFolder)
+            .Build();
 
         // Enable standard browser shortcuts and status bar for this specific external window
         googleWindow.Options.AreBrowserAcceleratorKeysEnabled = true;
@@ -160,17 +161,16 @@
 
     private async Task OpenWeatherPanel()
     {
+        if (WindowManager.MainWindow?.UserDataFolder is null) return;
         _isOpening = true;
         StateHasChanged();
 
-        var weatherWindow = new WebViewWindow("Weather", 800, 600)
-        {
-            EnableDarkMode = true,
-            BackgroundColor = System.Drawing.Color.FromArgb(255, 30, 30, 30),
-            UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "Secondary"),
-            ShowOnlyAfterLoad = true,
-            WindowState = WindowState.Normal
-        };
+        var weatherWindow = WebViewWindowBuilder.Create("Weather")
+            .UseDarkMode()
+            .ShowOnlyAfterLoad()
+            .WithUserDataFolder(WindowManager.MainWindow.UserDataFolder)
+            .WithInitialState(WindowState.Normal)
+            .Build();
 
         await BootAndTrackWindow(weatherWindow);
     }
@@ -187,17 +187,16 @@
         _isOpening = true;
         StateHasChanged();
 
-        var kioskWindow = new WebViewWindow("Weather Kiosk", secondaryDisplay.Bounds.Width, secondaryDisplay.Bounds.Height)
-        {
-            IsBorderless = true,
-            X = secondaryDisplay.Bounds.X,
-            Y = secondaryDisplay.Bounds.Y,
-            EnableDarkMode = true,
-            BackgroundColor = System.Drawing.Color.FromArgb(255, 10, 10, 10),
-            UserDataFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "Secondary"),
-            ShowOnlyAfterLoad = true,
-            WindowState = WindowState.Normal
-        };
+        var kioskWindow = WebViewWindowBuilder.Create("Weather Kiosk", secondaryDisplay.Bounds.Width, secondaryDisplay.Bounds.Height)
+            .ShowOnlyAfterLoad()
+            .WithBackgroundColor(System.Drawing.Color.FromArgb(255, 10, 10, 10))
+            .UseDarkMode()
+            .WithUserDataFolder(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "Secondary"))
+            .WithInitialState(WindowState.Normal)
+            .MakeBorderless()
+            .MakeTopMost()
+            .WithPosition(secondaryDisplay.Bounds.X, secondaryDisplay.Bounds.Y)
+            .Build();
 
         await BootAndTrackWindow(kioskWindow);
     }
