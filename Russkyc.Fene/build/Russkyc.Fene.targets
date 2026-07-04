@@ -1,5 +1,6 @@
 ﻿<Project>
-    <Target Name="FeneHideConsoleAppHost" BeforeTargets="_CreateAppHost" Condition="'$(OutputType)' == 'Exe'">
+
+    <Target Name="HideConsoleAppHost" BeforeTargets="_CreateAppHost">
         <PropertyGroup>
             <_UseWindowsGraphicalUserInterface>true</_UseWindowsGraphicalUserInterface>
         </PropertyGroup>

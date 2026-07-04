@@ -13,7 +13,9 @@ public class WindowManager
     private WebViewWindow? _mainWindow;
     private string _baseUrl = string.Empty;
     private readonly ConcurrentDictionary<Guid, WebViewWindow> _activeWindows = new();
-
+    private static readonly Lazy<WindowManager> _shared = new(() => new WindowManager());
+    public static WindowManager Shared => _shared.Value;
+    
     /// <summary>
     /// Gets the primary application window, if currently initialized.
     /// </summary>
@@ -24,6 +26,32 @@ public class WindowManager
         _baseUrl = baseUrl.TrimEnd('/');
     }
 
+    public void RunDesktop(WebViewWindow mainWindow, string url)
+    {
+        mainWindow.Closed += () => 
+        {
+            Environment.Exit(0);
+        };
+
+        // Fix: If the entry thread isn't STA, spawn an isolated safe STA context
+        if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+        {
+            var uiThread = new Thread(() =>
+            {
+                mainWindow.ShowAndRun(url);
+            }) { IsBackground = false };
+
+            uiThread.SetApartmentState(ApartmentState.STA);
+            uiThread.Start();
+            uiThread.Join(); // Blocks entry thread nicely until native UI finishes
+        }
+        else
+        {
+            mainWindow.ShowAndRun(url);
+            Thread.Sleep(Timeout.Infinite);
+        }
+    }
+    
     /// <summary>
     /// Asynchronously spawns a native window. The task completes when the navigation 
     /// to the requested path is fully finished.

@@ -3,22 +3,153 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Hello, world!</title>
+    <title>Fene Application Environment</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <link rel="stylesheet" type="text/css" href="./tailwind.css" />
+    <link rel="stylesheet" type="text/css" href="app.min.css" />
+    <style>
+        /* Block platform text/drag selectors to reinforce desktop native shell illusion */
+        * {
+            user-select: none;
+            -webkit-user-drag: none;
+            box-sizing: border-box;
+        }
+
+        /* High-fidelity native UI focus treatment */
+        input:focus {
+            outline: 2px solid #6366f1;
+            outline-offset: -1px;
+        }
+
+        /* Light/Dark theme configuration mapped over your exact C# colors */
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #202020; color: #d4d4d8; }
+            .panel { background-color: #262626; border-color: #404040; }
+            .input-box { background-color: #171717; border-color: #404040; color: #ffffff; }
+            .btn-secondary { background-color: #2e2e2e; border-color: #4a4a4a; color: #e4e4e7; }
+            .btn-secondary:hover { background-color: #3a3a3a; border-color: #5a5a5a; }
+            header, footer { border-color: #333333; }
+            .text-muted { color: #71717a; }
+            .text-title { color: #ffffff; }
+        }
+
+        @media (prefers-color-scheme: light) {
+            body { background-color: #ffffff; color: #27272a; }
+            .panel { background-color: #f4f4f5; border-color: #e4e4e7; }
+            .input-box { background-color: #ffffff; border-color: #d4d4d8; color: #000000; }
+            .btn-secondary { background-color: #ffffff; border-color: #d4d4d8; color: #27272a; }
+            .btn-secondary:hover { background-color: #fafafa; border-color: #a1a1aa; }
+            header, footer { border-color: #e4e4e7; }
+            .text-muted { color: #71717a; }
+            .text-title { color: #09090b; }
+        }
+    </style>
 </head>
 
-<body class="p-5 bg-gray-900 text-indigo-200">
-    <h1 class="mb-5 font-mono text-indigo-400 text-5xl">Hello, 🌍!</h1>
-    <p class="mb-5">This is a tiny .NET 6 Windows application hosting web UI in WebView2. No WinForms, no WPF, no WinUI - just a Win32 message pump.</p>
+<body class="min-h-screen p-8 font-sans flex flex-col justify-between antialiased">
 
-    <button id="btn1" class="bg-indigo-600 hover:bg-indigo-800 text-white font-bold py-1 px-4 rounded-md self-center">Click me to demo .NET-JS interop</button>
+<!-- Header Section -->
+<header class="flex items-center justify-between border-b pb-4">
+    <div>
+        <h1 class="font-semibold text-base text-title tracking-tight">Fene Runtime Environment</h1>
+        <p class="text-xs text-muted font-mono">Process ID: Standalone Win32 Shell Loop</p>
+    </div>
+    <div class="text-xs font-mono text-muted">
+        ApartmentState: STA
+    </div>
+</header>
 
-    <script>
-        btn1.onclick = (event) => {
-            window.chrome.webview.postMessage("test");
+<!-- Main Content Body -->
+<main class="max-w-2xl w-full mx-auto my-auto py-6 space-y-6">
+    <div class="space-y-2">
+        <h2 class="text-2xl font-bold text-title tracking-tight">
+            Application Workspace Initialized
+        </h2>
+        <p class="text-sm text-muted leading-relaxed">
+            This window instance is running directly via unmanaged PInvoke messaging queues and a low-footprint CoreWebView2 layout handle.
+        </p>
+    </div>
+
+    <!-- System Interop Control Panel -->
+    <div class="panel border rounded-lg p-5 space-y-5 shadow-sm">
+        <div class="flex items-center justify-between border-b pb-3 border-inherit">
+            <span class="text-xs font-mono font-bold uppercase tracking-wider text-muted">Platform Interop Bridge</span>
+            <span class="text-xs text-muted font-mono">webview.postMessage</span>
+        </div>
+
+        <!-- Action Grid Layout -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button id="btnOpenDialog" class="btn-secondary flex items-center justify-between font-medium py-2.5 px-4 border rounded-md text-sm transition-colors duration-150 shadow-sm">
+                <span>Spawn Modal Window</span>
+                <span class="text-xs font-mono opacity-60">CenterOwner</span>
+            </button>
+
+            <button id="btnOpenTools" class="btn-secondary flex items-center justify-between font-medium py-2.5 px-4 border rounded-md text-sm transition-colors duration-150 shadow-sm">
+                <span>Invoke Native DevTools</span>
+                <span class="text-xs font-mono opacity-60">Chromium</span>
+            </button>
+        </div>
+
+        <!-- Message Pipeline Form Block -->
+        <div class="space-y-2 pt-2">
+            <label for="txtMessage" class="block text-xs font-bold text-muted uppercase tracking-wider">Synchronize Window Message String</label>
+            <div class="flex gap-2">
+                <input id="txtMessage" type="text" placeholder="Enter text payload to process..."
+                       class="input-box flex-1 border rounded-md px-3 py-2 text-sm shadow-sm transition-colors" />
+                <button id="btnEmit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm px-4 py-2 rounded-md shadow-sm transition-colors">
+                    Send Message
+                </button>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Footer Meta Block -->
+<footer class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-t pt-4 gap-2 text-xs font-mono text-muted">
+    <div class="flex items-center gap-4">
+        <span><b>Runtime:</b> .NET 10 Engine</span>
+        <span><b>Host:</b> VirtualHost Mapping</span>
+    </div>
+    <div>
+        &copy; 2026 Russell Camo (russkyc).
+    </div>
+</footer>
+
+<script>
+    const FeneHost = {
+        post: (payload) => {
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(payload);
+            } else {
+                console.error("[Fene Platform Error] Runtime engine unavailable:", payload);
+            }
         }
-    </script>
+    };
+
+    // Correctly matched programmatic command string payloads
+    btnOpenDialog.onclick = () => FeneHost.post(JSON.stringify({
+        request: "dialog_request"
+    }));
+    btnOpenTools.onclick = () => FeneHost.post(JSON.stringify({
+        request: "open_devtools_request"
+    }));
+
+    btnEmit.onclick = () => {
+        const input = txtMessage.value.trim();
+        if (input) {
+            FeneHost.post(JSON.stringify({
+                request: "notify_request",
+                payload: input
+            }));
+            txtMessage.value = "";
+        }
+    };
+
+    txtMessage.onkeydown = (e) => {
+        if (e.key === "Enter") {
+            btnEmit.click();
+        }
+    };
+</script>
 </body>
 
 </html>

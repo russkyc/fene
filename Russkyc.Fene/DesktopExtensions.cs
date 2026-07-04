@@ -8,7 +8,7 @@ public static class DesktopExtensions
 {
     public static IServiceCollection AddFene(this IServiceCollection serviceCollection)
     {
-        serviceCollection.AddSingleton<WindowManager>();
+        serviceCollection.AddSingleton<WindowManager>(_ => WindowManager.Shared);
         return serviceCollection;
     }
     
@@ -28,7 +28,9 @@ public static class DesktopExtensions
             Environment.Exit(0);
         };
 
-        windowManager.OpenAsync(initialPath, mainWindow, true);
+        // OpenAsync natively configures and spins up the background STA thread loop safely
+        windowManager.OpenAsync(initialPath, mainWindow, true).GetAwaiter().GetResult();
         Thread.Sleep(Timeout.Infinite);
     }
+    
 }

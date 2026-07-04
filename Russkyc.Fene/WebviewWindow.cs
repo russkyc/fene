@@ -2,6 +2,7 @@
 using System.Drawing;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -113,6 +114,7 @@ public class WebViewWindow(
     public WebViewSettingsOptions Options { get; } = new();
 
     public event Action<string>? WebMessageReceived;
+    public event Action<JsonDocument>? WebMessageJsonReceived;
     public event Action<string>? NavigationStarted;
     public event Action<string>? NavigationCompleted;
     public event Action? Closed;
@@ -262,8 +264,32 @@ public class WebViewWindow(
 
         return container;
     }
-
-    public unsafe void ShowAndRun(string startUrl, WebViewWindow? owner = null)
+    
+    /// <summary>
+    /// Registers a specialized strongly-typed handler for incoming JSON structural objects.
+    /// </summary>
+    public void OnWebMessageReceived<T>(Action<T?> handler, JsonSerializerOptions? options = null) where T : class
+    {
+        WebMessageJsonReceived += (jsonDoc) =>
+        {
+            try
+            {
+                // Deserialize the root element directly into the requested target layout model
+                var targetObject = jsonDoc.Deserialize<T>(options ?? new JsonSerializerOptions 
+                { 
+                    PropertyNameCaseInsensitive = true 
+                });
+                
+                handler(targetObject);
+            }
+            catch
+            {
+                // Silently skip or log malformed payloads that do not map to Type T
+            }
+        };
+    }
+    
+    internal unsafe void ShowAndRun(string startUrl, WebViewWindow? owner = null)
     {
 #if DEBUG
         PInvoke.AllocConsole();
@@ -637,8 +663,26 @@ public class WebViewWindow(
 
             _controller.CoreWebView2.WebMessageReceived += (_, e) =>
             {
-                var text = e.TryGetWebMessageAsString();
-                if (!string.IsNullOrEmpty(text)) WebMessageReceived?.Invoke(text);
+                // Capture the raw text safely from WebView2 context
+                var rawText = e.TryGetWebMessageAsString();
+                if (string.IsNullOrEmpty(rawText)) return;
+
+                // 1. Invoke standard raw string intercept listeners
+                WebMessageReceived?.Invoke(rawText);
+
+                // 2. Safely parse JSON structure to feed strongly-typed handlers
+                if (WebMessageJsonReceived != null)
+                {
+                    try
+                    {
+                        using var jsonDoc = JsonDocument.Parse(rawText);
+                        WebMessageJsonReceived.Invoke(jsonDoc);
+                    }
+                    catch (JsonException)
+                    {
+                        // The string was a plain word or token, not structural JSON; ignore fallback parse loops safely
+                    }
+                }
             };
             _controller.CoreWebView2.NavigationStarting += (_, e) => NavigationStarted?.Invoke(e.Uri);
             _controller.CoreWebView2.NavigationCompleted += (_, _) =>

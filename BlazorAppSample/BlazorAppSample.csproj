@@ -5,30 +5,15 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <NoDefaultLaunchSettingsFile>True</NoDefaultLaunchSettingsFile>
-        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException><!-- 1. Keep as Exe so Blazor completely generates blazor.web.js and all static assets -->
+        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
         <OutputType>Exe</OutputType>
         <AppHostWindowsGUI>true</AppHostWindowsGUI>
         <ApplicationIcon>icon.ico</ApplicationIcon>
+        <NoWarn>CA1416;MSB3277</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Russkyc.Fene\Russkyc.Fene.csproj" />
+      <PackageReference Include="Russkyc.Fene" Version="1.0.0" />
     </ItemGroup>
 
-    <ItemGroup>
-      <_ContentIncludedByDefault Remove="publish\web.config" />
-      <_ContentIncludedByDefault Remove="publish\appsettings.Development.json" />
-      <_ContentIncludedByDefault Remove="publish\appsettings.json" />
-      <_ContentIncludedByDefault Remove="publish\BlazorAppSample.deps.json" />
-      <_ContentIncludedByDefault Remove="publish\BlazorAppSample.runtimeconfig.json" />
-      <_ContentIncludedByDefault Remove="publish\BlazorAppSample.staticwebassets.endpoints.json" />
-      <_ContentIncludedByDefault Remove="publish\WebView2Data\BlazorShell\EBWebView\component_crx_cache\metadata.json" />
-      <_ContentIncludedByDefault Remove="publish\WebView2Data\BlazorShell\EBWebView\extensions_crx_cache\metadata.json" />
-    </ItemGroup>
-    <!-- THE REAL FIX: Intercept the SDK's AppHost generator task and force the GUI flag -->
-    <Target Name="HideConsoleAppHost" BeforeTargets="_CreateAppHost">
-        <PropertyGroup>
-            <_UseWindowsGraphicalUserInterface>true</_UseWindowsGraphicalUserInterface>
-        </PropertyGroup>
-    </Target>
 </Project>

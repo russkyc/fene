@@ -5,7 +5,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <NoWarn>CA1416</NoWarn>
+        <NoWarn>CA1416;MSB3277</NoWarn>
         <ApplicationIcon>icon.ico</ApplicationIcon>
     </PropertyGroup>
 
@@ -13,13 +13,13 @@
         <None Update="wwwroot\index.html">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Update="wwwroot\tailwind.css">
+        <None Update="wwwroot\app.min.css">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Russkyc.Fene\Russkyc.Fene.csproj" />
+      <PackageReference Include="Russkyc.Fene" Version="1.0.0" />
     </ItemGroup>
 
 </Project>
