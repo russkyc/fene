@@ -19,7 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Russkyc.Fene\Russkyc.Fene.csproj" />
+      <PackageReference Include="Russkyc.Fene" Version="1.0.0" />
     </ItemGroup>
 
 </Project>
