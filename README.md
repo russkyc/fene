@@ -1,6 +1,4 @@
-﻿# Fene
-
-### A Slim WebView2 Desktop Wrapper for .NET 10
+﻿# Fene - A Slim WebView2 Desktop Wrapper for .NET 10
 
 By completely bypassing heavy, deep UI stacks like WPF, WinForms, or MAUI, **Fene** drops application memory overhead,
 scales down process footprints, achieves sub-millisecond initialization loops, and provides raw control over desktop
