@@ -6,7 +6,7 @@ namespace Russkyc.Fene;
 
 public static class DesktopExtensions
 {
-    public static IServiceCollection AddFeneServices(this IServiceCollection serviceCollection)
+    public static IServiceCollection AddFene(this IServiceCollection serviceCollection)
     {
         serviceCollection.AddSingleton<WindowManager>();
         return serviceCollection;

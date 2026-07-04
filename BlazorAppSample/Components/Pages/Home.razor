@@ -106,10 +106,10 @@
                     {
                         <div class="border rounded p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
                             <div class="d-flex flex-wrap gap-2">
-                                @foreach (var font in _fonts)
+                                @foreach (var kvp in _fonts)
                                 {
-                                    <span class="badge bg-dark text-light" style="font-family: '@font', sans-serif;">
-                                        @font
+                                    <span class="badge bg-dark text-light" style="font-family: '@kvp.Key', sans-serif;">
+                                        @kvp.Key @kvp.Value
                                     </span>
                                 }
                             </div>
@@ -127,7 +127,7 @@
     private string[]? _multiFilePaths;
     private string? _saveFilePath;
     private string? _folderPath;
-    private IEnumerable<string>? _fonts;
+    private Dictionary<string, string>? _fonts;
 
     private void PickSingleFile()
     {

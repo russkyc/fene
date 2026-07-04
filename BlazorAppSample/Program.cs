@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddFeneServices();
+builder.Services.AddFene();
 
 var app = builder.Build();
 
@@ -23,6 +23,8 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+app.MapFeneFontsApi();
 
 var mainWindow = new WebViewWindow("Blazor App Sample", 1200, 800, 1200, 800)
 {

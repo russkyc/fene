@@ -131,42 +131,66 @@ public static class Platform
     }
 
     /// <summary>
-    /// Retrieves an exhaustive list of system-wide and user-installed font family names 
-    /// directly from the Windows Registry, capturing fonts injected by modern font managers.
+    /// Retrieves a dictionary of system-wide and user-installed fonts,
+    /// mapping the clean Font Name (Key) to its absolute File Path (Value).
     /// </summary>
-    public static IEnumerable<string> GetInstalledFonts()
+    public static Dictionary<string, string> GetInstalledFonts()
     {
-        // HashSet prevents duplicates if a font exists in both HKLM and HKCU
-        var fonts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var fontDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        void ExtractFontsFromRegistryKey(RegistryKey rootKey, string path)
+        // Define known Windows font directories for resolving relative registry paths
+        var winFontsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts");
+        var userFontsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Fonts");
+        var searchDirectories = new[] { winFontsDir, userFontsDir };
+
+        void ExtractFontsFromRegistryKey(RegistryKey rootKey, string registryPath)
         {
-            using var key = rootKey.OpenSubKey(path);
+            using var key = rootKey.OpenSubKey(registryPath);
             if (key == null) return;
 
             foreach (var valueName in key.GetValueNames())
             {
-                // The registry stores them as "Arial (TrueType)", we just want "Arial"
                 var cleanName = valueName;
-                int parenIndex = cleanName.IndexOf(" (", StringComparison.Ordinal);
+                var parenIndex = cleanName.IndexOf(" (", StringComparison.Ordinal);
                 if (parenIndex > 0)
                 {
                     cleanName = cleanName.Substring(0, parenIndex);
                 }
+                cleanName = cleanName.Trim();
 
-                fonts.Add(cleanName);
+                if (string.IsNullOrWhiteSpace(cleanName) || fontDict.ContainsKey(cleanName))
+                    continue;
+
+                var rawValue = key.GetValue(valueName)?.ToString()?.Trim().Trim('"');
+                if (string.IsNullOrWhiteSpace(rawValue)) 
+                    continue;
+
+                var resolvedPath = rawValue;
+                if (!Path.IsPathRooted(rawValue))
+                {
+                    foreach (var dir in searchDirectories)
+                    {
+                        var candidate = Path.Combine(dir, rawValue);
+                        if (File.Exists(candidate))
+                        {
+                            resolvedPath = candidate;
+                            break;
+                        }
+                    }
+                }
+
+                fontDict[cleanName] = resolvedPath;
             }
         }
 
-        // 1. Capture Machine-wide System Fonts (Admin installs)
-        ExtractFontsFromRegistryKey(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts");
-
-        // 2. Capture Per-User Fonts (Font managers, Adobe Fonts, User installs)
         ExtractFontsFromRegistryKey(Registry.CurrentUser, @"Software\Microsoft\Windows NT\CurrentVersion\Fonts");
 
-        return fonts.OrderBy(f => f);
-    }
+        ExtractFontsFromRegistryKey(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts");
 
+        return fontDict.OrderBy(kvp => kvp.Key)
+                       .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
+    }
+    
     /// <summary>
     /// Opens a URL in the user's default web browser, or opens a local file 
     /// in its associated default Windows application (e.g., opening a .pdf in Acrobat).
