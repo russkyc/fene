@@ -124,7 +124,7 @@ public class WebViewWindow(
     public event Action<string>? NavigationCompleted;
     public event Action? Closed;
     public event Action? DisplaysChanged;
-    
+
     public Func<Task<bool>>? ClosingAsync { get; set; }
 
     public void MapVirtualHost(string hostName, string folderPath, HostResourceAccessKind accessKind)
@@ -431,6 +431,7 @@ public class WebViewWindow(
             ApplyWindowState();
             if (IsTopMost) ApplyTopMostState();
         }
+
         if (IsBorderless)
         {
             // Extend the bottom margin by 1 pixel. This triggers the Desktop Window Manager (DWM)
@@ -444,6 +445,7 @@ public class WebViewWindow(
                 SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
                 SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED);
         }
+
         _uiThreadSyncCtx = new UiThreadSynchronizationContext(_hwnd);
         SynchronizationContext.SetSynchronizationContext(_uiThreadSyncCtx);
 
@@ -536,46 +538,71 @@ public class WebViewWindow(
         switch (msg)
         {
             case WmNcCalcSize:
-                if (IsBorderless)
+                if (IsBorderless && wParam.Value != 0)
                 {
-                    // Returning 0 when wParam is TRUE expands our client view to occupy 100% of the window size,
-                    // effectively rendering over the native title bar while keeping the drop shadow intact.
-                    if (wParam.Value != 0) return default;
+                    unsafe
+                    {
+                        RECT* rgrc = (RECT*)lParam.Value;
+                        
+                        // Save the absolute top position of the window box before the OS modifies it
+                        var originalTop = rgrc[0].top;
+
+                        // Let the OS calculate standard client area frame allocations (Left, Right, Bottom borders)
+                        var lresult = PInvoke.DefWindowProc(_hwnd, msg, wParam, lParam);
+
+                        // 3. Reclaim the title bar space by pulling the client area top back to the edge.
+                        if (PInvoke.IsZoomed(_hwnd))
+                        {
+                            // When maximized, Windows pushes window borders off-screen by about 8px.
+                            // We adjust the top back down slightly so your Blazor title bar isn't cut off.
+                            int framePadding = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYFRAME) + 
+                                               PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXPADDEDBORDER);
+                            rgrc[0].top = originalTop + framePadding;
+                        }
+                        else
+                        {
+                            // When normal/windowed, pull the content safely to the absolute top edge
+                            rgrc[0].top = originalTop;
+                        }
+
+                        return lresult;
+                    }
                 }
                 break;
+                
             case WmNcHitTest:
                 if (IsBorderless)
                 {
-                    // 1. Unpack absolute screen space mouse coordinates from lParam
-                    int x = unchecked((short)(uint)lParam.Value);
-                    int y = unchecked((short)((uint)lParam.Value >> 16));
+                    // Let the native Win32 window manager evaluate the standard transparent borders first.
+                    // This seamlessly handles left, right, bottom, and all diagonal corner resizes!
+                    var hitResult = PInvoke.DefWindowProc(_hwnd, msg, wParam, lParam);
+                    
+                    // Since our client area now goes to the very top, we must manually handle the top resize edge.
+                    if (hitResult.Value == 1) // 1 == HTCLIENT (Mouse is inside the app workspace)
+                    {
+                        // Unpack screen space mouse coordinates
+                        int x = unchecked((short)(uint)lParam.Value);
+                        int y = unchecked((short)((uint)lParam.Value >> 16));
 
-                    // 2. Transcribe to local coordinates relative to the window boundaries
-                    PInvoke.GetWindowRect(_hwnd, out var rect);
-                    var localX = x - rect.left;
-                    var localY = y - rect.top;
-                    var width = rect.right - rect.left;
-                    var height = rect.bottom - rect.top;
+                        // Convert to local window coordinates
+                        PInvoke.GetWindowRect(_hwnd, out var rect);
+                        int localY = y - rect.top;
 
-                    const int borderThickness = 6;
+                        // Define standard Windows top-edge resize thickness (approx 5-7 pixels)
+                        const int topResizeThickness = 6;
 
-                    // Evaluate Window Corner Zones first to resolve diagonal resizing
-                    if (localX < borderThickness && localY < borderThickness) return (LRESULT)13; // HTTOPLEFT
-                    if (localX > width - borderThickness && localY < borderThickness) return (LRESULT)14; // HTTOPRIGHT
-                    if (localX < borderThickness && localY > height - borderThickness) return (LRESULT)16; // HTBOTTOMLEFT
-                    if (localX > width - borderThickness && localY > height - borderThickness) return (LRESULT)17; // HTBOTTOMRIGHT
+                        if (localY < topResizeThickness && !PInvoke.IsZoomed(_hwnd))
+                        {
+                            return (LRESULT)12; // 12 == HTTOP (Tells Windows to change cursor to vertical resize arrow)
+                        }
 
-                    // Evaluate Window Edge Borders for structural resizing directional adjustments
-                    if (localY < borderThickness) return (LRESULT)12; // HTTOP
-                    if (localY > height - borderThickness) return (LRESULT)15; // HTBOTTOM
-                    if (localX < borderThickness) return (LRESULT)10; // HTLEFT
-                    if (localX > width - borderThickness) return (LRESULT)11; // HTRIGHT
-
-                    // Return HTCLIENT and let WebView2's native engine handle the title bar dragging regions
-                    // based on CSS 'app-region: drag' markings!
-                    return (LRESULT)1;
+                        return (LRESULT)1; // 1 == HTCLIENT (Pass input normally to WebView2 / app-region: drag)
+                    }
+                    
+                    return hitResult;
                 }
                 break;
+
             case WmGetMinMaxInfo:
                 if (MinWidth.HasValue || MinHeight.HasValue)
                 {
@@ -782,6 +809,13 @@ public class WebViewWindow(
             PInvoke.GetClientRect(_hwnd, out var rect);
             _controller.Bounds = new Rectangle(0, 0, rect.right, rect.bottom);
             _controller.IsVisible = true;
+
+            if (IsBorderless)
+            {
+                // We listen to window size events and keep a 4-6 pixel input passthrough zone on the borders
+                _controller.CoreWebView2.Settings.IsNonClientRegionSupportEnabled = true;
+            }
+
             _controller.CoreWebView2.Navigate(targetUrl);
         }
         catch (Exception ex)
@@ -791,7 +825,7 @@ public class WebViewWindow(
             Environment.Exit(1);
         }
     }
-    
+
     private async Task EvaluateClosingAsync()
     {
         if (ClosingAsync == null) return;
