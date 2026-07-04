@@ -31,6 +31,7 @@ public class WebViewWindow(
     private static readonly ConcurrentDictionary<HWND, WebViewWindow> WindowMap = new();
 
     private HWND _hwnd;
+    private HWND _ownerHwnd;
     private CoreWebView2Controller? _controller;
     private UiThreadSynchronizationContext? _uiThreadSyncCtx;
     private readonly ConcurrentQueue<Action> _workQueue = new();
@@ -267,6 +268,10 @@ public class WebViewWindow(
 #if DEBUG
         PInvoke.AllocConsole();
 #endif
+        if (owner != null)
+        {
+            _ownerHwnd = new HWND(owner.Handle);
+        }
 
         HINSTANCE hInstance = PInvoke.GetModuleHandle((char*)null);
         string className = $"WebViewWindowClass_{Guid.NewGuid():N}";
@@ -527,6 +532,13 @@ public class WebViewWindow(
                 catch
                 {
                     // ignored
+                }
+
+                // destroying this window so the OS naturally passes active focus back to it.
+                if (!_ownerHwnd.IsNull)
+                {
+                    PInvoke.EnableWindow(_ownerHwnd, true);
+                    PInvoke.SetForegroundWindow(_ownerHwnd);
                 }
 
                 PInvoke.DestroyWindow(_hwnd);

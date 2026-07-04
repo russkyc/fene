@@ -133,9 +133,10 @@
         _isOpening = true;
         StateHasChanged();
         
-        var googleWindow = WebViewWindowBuilder.Create("Google Container", 1000, 700)
+        var googleWindow = WebViewWindowBuilder.Create("Google Container", 600, 400)
             .UseDarkMode()
             .WithUserDataFolder(WindowManager.MainWindow.UserDataFolder)
+            .WithStartPosition(WindowStartPosition.CenterOwner)
             .Build();
 
         // Enable standard browser shortcuts and status bar for this specific external window

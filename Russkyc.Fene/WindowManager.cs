@@ -77,7 +77,7 @@ public class WindowManager
 
         IntPtr ownerHandle = owner?.Handle ?? IntPtr.Zero;
 
-        // Block input to the parent window to enforce modality
+        // Block input to the parent window to enforce modality upfront
         if (ownerHandle != IntPtr.Zero)
         {
             PInvoke.EnableWindow(new HWND(ownerHandle), false);
@@ -85,11 +85,10 @@ public class WindowManager
 
         window.Closed += () =>
         {
-            // Re-enable and focus the parent window when the dialog dies
+            // Safety fallback check if window loop exited atypically
             if (ownerHandle != IntPtr.Zero)
             {
                 PInvoke.EnableWindow(new HWND(ownerHandle), true);
-                PInvoke.SetForegroundWindow(new HWND(ownerHandle));
             }
 
             _activeWindows.TryRemove(windowId, out _);
@@ -104,7 +103,6 @@ public class WindowManager
                     ? path
                     : $"{_baseUrl}/{path.TrimStart('/')}");
 
-            // Pass the WebViewWindow owner object directly
             window.ShowAndRun(targetUrl, owner);
         }) { IsBackground = true };
 
