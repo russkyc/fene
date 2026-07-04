@@ -8,6 +8,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Dwm;
 using Windows.Win32.Graphics.Gdi;
+using Windows.Win32.UI.HiDpi;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Russkyc.Fene;
@@ -264,7 +265,7 @@ public class WebViewWindow(
 
         return container;
     }
-    
+
     /// <summary>
     /// Registers a specialized strongly-typed handler for incoming JSON structural objects.
     /// </summary>
@@ -275,11 +276,11 @@ public class WebViewWindow(
             try
             {
                 // Deserialize the root element directly into the requested target layout model
-                var targetObject = jsonDoc.Deserialize<T>(options ?? new JsonSerializerOptions 
-                { 
-                    PropertyNameCaseInsensitive = true 
+                var targetObject = jsonDoc.Deserialize<T>(options ?? new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
                 });
-                
+
                 handler(targetObject);
             }
             catch
@@ -288,9 +289,11 @@ public class WebViewWindow(
             }
         };
     }
-    
+
     internal unsafe void ShowAndRun(string startUrl, WebViewWindow? owner = null)
     {
+        var perMonitorV2 = new DPI_AWARENESS_CONTEXT((void*)-4);
+        PInvoke.SetProcessDpiAwarenessContext(perMonitorV2);
 #if DEBUG
         PInvoke.AllocConsole();
 #endif
