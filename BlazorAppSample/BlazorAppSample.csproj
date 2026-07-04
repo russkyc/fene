@@ -12,8 +12,4 @@
         <NoWarn>CA1416;MSB3277</NoWarn>
     </PropertyGroup>
 
-    <ItemGroup>
-      <PackageReference Include="Russkyc.Fene" Version="1.0.0" />
-    </ItemGroup>
-
 </Project>
