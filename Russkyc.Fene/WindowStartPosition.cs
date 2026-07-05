@@ -2,7 +2,7 @@
 
 public enum WindowStartPosition
 {
-    OSDefault,
+    OsDefault,
     CenterScreen,
     CenterOwner
 }

@@ -4,7 +4,7 @@ using Russkyc.Fene;
 var prefersDark = Platform.IsSystemInDarkMode();
 var windowManager = WindowManager.Shared;
 
-var window = WebViewWindowBuilder
+var window = WindowBuilder
     .Create("Simple App Window", 1000, 700)
     .WithStartPosition(WindowStartPosition.CenterScreen)
     .UseDarkMode(prefersDark)
@@ -30,7 +30,7 @@ window.OnWebMessageReceived<WebMessage>(async message =>
     }
     else if (message.Request == "dialog_request")
     {
-        var dialog = WebViewWindowBuilder
+        var dialog = WindowBuilder
             .Create("Dialog Window", 600, 450)
             .WithStartPosition(WindowStartPosition.CenterOwner)
             .UseDarkMode(prefersDark)

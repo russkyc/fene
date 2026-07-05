@@ -6,13 +6,13 @@ namespace Russkyc.Fene;
 
 public static class DesktopExtensions
 {
-    public static IServiceCollection AddFene(this IServiceCollection serviceCollection)
+    public static IServiceCollection AddFeneServices(this IServiceCollection serviceCollection)
     {
         serviceCollection.AddSingleton<WindowManager>(_ => WindowManager.Shared);
         return serviceCollection;
     }
     
-    public static void RunDesktop(this WebApplication app, WebViewWindow mainWindow, string initialPath = "/")
+    public static void RunDesktop(this WebApplication app, Window mainWindow, string initialPath = "/")
     {
         StaticWebAssetsLoader.UseStaticWebAssets(app.Environment, app.Configuration);
         

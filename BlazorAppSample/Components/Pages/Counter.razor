@@ -114,8 +114,8 @@
     private List<Cookie>? _cookies;
 
     // Trackers for event cleanups
-    private WebViewWindow? _initWindowReference;
-    private WebViewWindow? _activeWeatherWindow;
+    private Window? _initWindowReference;
+    private Window? _activeWeatherWindow;
 
     protected override void OnInitialized()
     {
@@ -133,7 +133,7 @@
         _isOpening = true;
         StateHasChanged();
         
-        var googleWindow = WebViewWindowBuilder.Create("Google Container", 600, 400)
+        var googleWindow = WindowBuilder.Create("Google Container", 600, 400)
             .UseDarkMode()
             .WithUserDataFolder(WindowManager.MainWindow.UserDataFolder)
             .WithStartPosition(WindowStartPosition.CenterOwner)
@@ -165,7 +165,7 @@
         _isOpening = true;
         StateHasChanged();
 
-        var weatherWindow = WebViewWindowBuilder.Create("Weather")
+        var weatherWindow = WindowBuilder.Create("Weather")
             .UseDarkMode()
             .WithUserDataFolder(WindowManager.MainWindow.UserDataFolder)
             .WithInitialState(WindowState.Normal)
@@ -186,7 +186,7 @@
         _isOpening = true;
         StateHasChanged();
 
-        var kioskWindow = WebViewWindowBuilder.Create("Weather Kiosk", secondaryDisplay.Bounds.Width, secondaryDisplay.Bounds.Height)
+        var kioskWindow = WindowBuilder.Create("Weather Kiosk", secondaryDisplay.Bounds.Width, secondaryDisplay.Bounds.Height)
             .WithBackgroundColor(System.Drawing.Color.FromArgb(255, 10, 10, 10))
             .UseDarkMode()
             .WithUserDataFolder(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Data", "Secondary"))
@@ -199,7 +199,7 @@
         await BootAndTrackWindow(kioskWindow);
     }
 
-    private async Task BootAndTrackWindow(WebViewWindow window)
+    private async Task BootAndTrackWindow(Window window)
     {
         if (_activeWeatherWindow != null)
         {

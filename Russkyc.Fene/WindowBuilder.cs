@@ -2,7 +2,7 @@
 
 namespace Russkyc.Fene;
 
-public sealed class WebViewWindowBuilder
+public sealed class WindowBuilder
 {
     private readonly string _title;
     private int? _width;
@@ -12,7 +12,7 @@ public sealed class WebViewWindowBuilder
     private int? _minHeight;
     private int? _x;
     private int? _y;
-    private WindowStartPosition _startPosition = WindowStartPosition.OSDefault;
+    private WindowStartPosition _startPosition = WindowStartPosition.OsDefault;
     private Color _backgroundColor = Color.Transparent;
     private bool _enableDarkMode;
     private string? _iconPath;
@@ -26,19 +26,19 @@ public sealed class WebViewWindowBuilder
     private readonly List<(string HostName, string FolderPath, HostResourceAccessKind AccessKind)> _virtualHosts = new();
     private readonly WebViewSettingsOptions _configureOptions = new();
 
-    private WebViewWindowBuilder(string title, int? width, int? height)
+    private WindowBuilder(string title, int? width, int? height)
     {
         _title = title;
         _width = width;
         _height = height;
     }
 
-    public static WebViewWindowBuilder Create(string title = "WebView Window", int? width = null, int? height = null)
+    public static WindowBuilder Create(string title = "WebView Window", int? width = null, int? height = null)
     {
-        return new WebViewWindowBuilder(title, width, height);
+        return new WindowBuilder(title, width, height);
     }
     
-    public WebViewWindow BuildKiosk()
+    public Window BuildKiosk()
     {
         _isBorderless = true;
         _isTopMost = true;
@@ -47,103 +47,103 @@ public sealed class WebViewWindowBuilder
         return Build();
     }
 
-    public WebViewWindowBuilder WithSize(int width, int height)
+    public WindowBuilder WithSize(int width, int height)
     {
         _width = width;
         _height = height;
         return this;
     }
 
-    public WebViewWindowBuilder WithMinSize(int minWidth, int minHeight)
+    public WindowBuilder WithMinSize(int minWidth, int minHeight)
     {
         _minWidth = minWidth;
         _minHeight = minHeight;
         return this;
     }
 
-    public WebViewWindowBuilder WithPosition(int x, int y)
+    public WindowBuilder WithPosition(int x, int y)
     {
-        _startPosition = WindowStartPosition.OSDefault; // Manual overrides bypass generic presets
+        _startPosition = WindowStartPosition.OsDefault; // Manual overrides bypass generic presets
         _x = x;
         _y = y;
         return this;
     }
 
-    public WebViewWindowBuilder WithStartPosition(WindowStartPosition startPosition)
+    public WindowBuilder WithStartPosition(WindowStartPosition startPosition)
     {
         _startPosition = startPosition;
         return this;
     }
 
-    public WebViewWindowBuilder WithBackgroundColor(Color color)
+    public WindowBuilder WithBackgroundColor(Color color)
     {
         _backgroundColor = color;
         return this;
     }
 
-    public WebViewWindowBuilder UseDarkMode(bool enabled = true)
+    public WindowBuilder UseDarkMode(bool enabled = true)
     {
         _enableDarkMode = enabled;
         return this;
     }
 
-    public WebViewWindowBuilder WithIcon(string path)
+    public WindowBuilder WithIcon(string path)
     {
         _iconPath = path;
         return this;
     }
 
-    public WebViewWindowBuilder WithUserDataFolder(string path)
+    public WindowBuilder WithUserDataFolder(string path)
     {
         _userDataFolder = path;
         return this;
     }
 
-    public WebViewWindowBuilder ShowOnlyAfterLoad(bool enabled = true)
+    public WindowBuilder ShowOnlyAfterLoad(bool enabled = true)
     {
         _showOnlyAfterLoad = enabled;
         return this;
     }
 
-    public WebViewWindowBuilder MakeBorderless(bool enabled = true)
+    public WindowBuilder MakeBorderless(bool enabled = true)
     {
         _isBorderless = enabled;
         return this;
     }
 
-    public WebViewWindowBuilder WithUserAgent(string userAgent)
+    public WindowBuilder WithUserAgent(string userAgent)
     {
         _userAgentOverride = userAgent;
         return this;
     }
 
-    public WebViewWindowBuilder WithInitialState(WindowState state)
+    public WindowBuilder WithInitialState(WindowState state)
     {
         _windowState = state;
         return this;
     }
 
-    public WebViewWindowBuilder MakeTopMost(bool enabled = true)
+    public WindowBuilder MakeTopMost(bool enabled = true)
     {
         _isTopMost = enabled;
         return this;
     }
 
-    public WebViewWindowBuilder MapVirtualHost(string hostName, string folderPath, HostResourceAccessKind accessKind = HostResourceAccessKind.Allow)
+    public WindowBuilder MapVirtualHost(string hostName, string folderPath, HostResourceAccessKind accessKind = HostResourceAccessKind.Allow)
     {
         _virtualHosts.Add((hostName, folderPath, accessKind));
         return this;
     }
 
-    public WebViewWindowBuilder ConfigureSettings(Action<WebViewSettingsOptions> action)
+    public WindowBuilder ConfigureSettings(Action<WebViewSettingsOptions> action)
     {
         action(_configureOptions);
         return this;
     }
 
-    public WebViewWindow Build()
+    public Window Build()
     {
-        var window = new WebViewWindow(_title, _width, _height, _minWidth, _minHeight)
+        var window = new Window(_title, _width, _height, _minWidth, _minHeight)
         {
             X = _x,
             Y = _y,

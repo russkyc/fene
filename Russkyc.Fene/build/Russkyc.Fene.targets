@@ -32,12 +32,6 @@
             <!-- 2. Clean out all leaky WebView2 XML documentation files -->
             <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
                                    Condition="'%(ResolvedFileToPublish.Extension)' == '.xml' And (String('%(ResolvedFileToPublish.Filename)').StartsWith('Microsoft.Web.WebView2'))" />
-            <!-- 3. Strip out development appsettings configurations from production builds -->
-            <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-                                   Condition="'%(ResolvedFileToPublish.Filename)' == 'appsettings.Development'" />
-            <!-- 4. Catch-all safety: Ensure no stray PDB files slip through -->
-            <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-                                   Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb'" />
         </ItemGroup>
     </Target>
 </Project>

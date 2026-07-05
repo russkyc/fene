@@ -21,10 +21,14 @@ public static class Platform
     /// <summary>
     /// Opens the native Windows file picker for a single file.
     /// </summary>
-    public static unsafe string? ShowOpenFileDialog(string title = "Open File", string filter = "All Files|*.*", WebViewWindow? owner = null)
+    public static unsafe string? ShowOpenFileDialog(string title = "Open File", string filter = "All Files|*.*",
+        Window? owner = null)
     {
         var dialogType = Type.GetTypeFromCLSID(ClsidFileOpenDialog);
-        var dialog = (IFileOpenDialog)Activator.CreateInstance(dialogType!)!;
+        if (dialogType == null || Activator.CreateInstance(dialogType) is not IFileOpenDialog dialog)
+        {
+            return null;
+        }
 
         fixed (char* pTitle = title) dialog.SetTitle(new PCWSTR(pTitle));
         ApplyFilter(dialog, filter);
@@ -44,10 +48,14 @@ public static class Platform
     /// <summary>
     /// Opens the native Windows file picker configured for multiple file selection.
     /// </summary>
-    public static unsafe string[] ShowOpenMultipleFilesDialog(string title = "Open Files", string filter = "All Files|*.*", WebViewWindow? owner = null)
+    public static unsafe string[] ShowOpenMultipleFilesDialog(string title = "Open Files",
+        string filter = "All Files|*.*", Window? owner = null)
     {
         var dialogType = Type.GetTypeFromCLSID(ClsidFileOpenDialog);
-        var dialog = (IFileOpenDialog)Activator.CreateInstance(dialogType!)!;
+        if (dialogType == null || Activator.CreateInstance(dialogType) is not IFileOpenDialog dialog)
+        {
+            return Array.Empty<string>();
+        }
 
         fixed (char* pTitle = title) dialog.SetTitle(new PCWSTR(pTitle));
         ApplyFilter(dialog, filter);
@@ -80,10 +88,14 @@ public static class Platform
     /// <summary>
     /// Opens the native Windows file save dialog.
     /// </summary>
-    public static unsafe string? ShowSaveFileDialog(string title = "Save File", string filter = "All Files|*.*", string defaultExtension = "", WebViewWindow? owner = null)
+    public static unsafe string? ShowSaveFileDialog(string title = "Save File", string filter = "All Files|*.*",
+        string defaultExtension = "", Window? owner = null)
     {
         var dialogType = Type.GetTypeFromCLSID(ClsidFileSaveDialog);
-        var dialog = (IFileSaveDialog)Activator.CreateInstance(dialogType!)!;
+        if (dialogType == null || Activator.CreateInstance(dialogType) is not IFileSaveDialog dialog)
+        {
+            return null;
+        }
 
         fixed (char* pTitle = title) dialog.SetTitle(new PCWSTR(pTitle));
         if (!string.IsNullOrEmpty(defaultExtension))
@@ -108,10 +120,13 @@ public static class Platform
     /// <summary>
     /// Opens the native Windows folder picker dialog.
     /// </summary>
-    public static unsafe string? ShowFolderBrowserDialog(string title = "Select Folder", WebViewWindow? owner = null)
+    public static unsafe string? ShowFolderBrowserDialog(string title = "Select Folder", Window? owner = null)
     {
         var dialogType = Type.GetTypeFromCLSID(ClsidFileOpenDialog);
-        var dialog = (IFileOpenDialog)Activator.CreateInstance(dialogType!)!;
+        if (dialogType == null || Activator.CreateInstance(dialogType) is not IFileOpenDialog dialog)
+        {
+            return null;
+        }
 
         fixed (char* pTitle = title) dialog.SetTitle(new PCWSTR(pTitle));
 
@@ -138,9 +153,9 @@ public static class Platform
     {
         var fontDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Define known Windows font directories for resolving relative registry paths
         var winFontsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts");
-        var userFontsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows", "Fonts");
+        var userFontsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft", "Windows", "Fonts");
         var searchDirectories = new[] { winFontsDir, userFontsDir };
 
         void ExtractFontsFromRegistryKey(RegistryKey rootKey, string registryPath)
@@ -156,13 +171,14 @@ public static class Platform
                 {
                     cleanName = cleanName.Substring(0, parenIndex);
                 }
+
                 cleanName = cleanName.Trim();
 
                 if (string.IsNullOrWhiteSpace(cleanName) || fontDict.ContainsKey(cleanName))
                     continue;
 
                 var rawValue = key.GetValue(valueName)?.ToString()?.Trim().Trim('"');
-                if (string.IsNullOrWhiteSpace(rawValue)) 
+                if (string.IsNullOrWhiteSpace(rawValue))
                     continue;
 
                 var resolvedPath = rawValue;
@@ -184,23 +200,20 @@ public static class Platform
         }
 
         ExtractFontsFromRegistryKey(Registry.CurrentUser, @"Software\Microsoft\Windows NT\CurrentVersion\Fonts");
-
         ExtractFontsFromRegistryKey(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts");
 
         return fontDict.OrderBy(kvp => kvp.Key)
-                       .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
     }
-    
+
     /// <summary>
     /// Opens a URL in the user's default web browser, or opens a local file 
-    /// in its associated default Windows application (e.g., opening a .pdf in Acrobat).
+    /// in its associated default Windows application.
     /// </summary>
     public static void OpenInDefaultApp(string pathOrUrl)
     {
         try
         {
-            // UseShellExecute = true forces Windows to evaluate the string and launch 
-            // the associated default program for the protocol or file extension.
             Process.Start(new ProcessStartInfo
             {
                 FileName = pathOrUrl,
@@ -215,16 +228,16 @@ public static class Platform
 
     /// <summary>
     /// Queries the Windows Registry to determine if the user's OS is currently using Dark Mode.
-    /// Useful for syncing Blazor themes with the native window frame.
     /// </summary>
     public static bool IsSystemInDarkMode()
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            using var key =
+                Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
             if (key?.GetValue("AppsUseLightTheme") is int lightTheme)
             {
-                return lightTheme == 0; // 0 means Dark Mode, 1 means Light Mode
+                return lightTheme == 0;
             }
         }
         catch
@@ -232,14 +245,14 @@ public static class Platform
             // Ignored
         }
 
-        return false; // Default to light theme if registry read fails
+        return false;
     }
 
     /// <summary>
-    /// Triggers a native Win32 blocking message box. Useful for critical alerts that 
-    /// need to look like native OS dialogs rather than HTML modals.
+    /// Triggers a native Win32 blocking message box.
     /// </summary>
-    public static unsafe void ShowMessageBox(string message, string title = "Information", bool isError = false, WebViewWindow? owner = null)
+    public static unsafe void ShowMessageBox(string message, string title = "Information", bool isError = false,
+        Window? owner = null)
     {
         var style = isError ? MESSAGEBOX_STYLE.MB_ICONERROR : MESSAGEBOX_STYLE.MB_ICONINFORMATION;
 
@@ -254,12 +267,11 @@ public static class Platform
             );
         }
     }
-    
+
     /// <summary>
     /// Triggers a native Win32 message box with Yes/No choices. 
-    /// Returns true if the user chooses 'Yes', false otherwise.
     /// </summary>
-    public static unsafe bool ShowConfirmationBox(string message, string title = "Confirm Exit", WebViewWindow? owner = null)
+    public static unsafe bool ShowConfirmationBox(string message, string title = "Confirm Exit", Window? owner = null)
     {
         var style = MESSAGEBOX_STYLE.MB_YESNO | MESSAGEBOX_STYLE.MB_ICONQUESTION;
 
@@ -276,7 +288,7 @@ public static class Platform
             return result == MESSAGEBOX_RESULT.IDYES;
         }
     }
-    
+
     private static unsafe void ApplyFilter(IFileDialog dialog, string filter)
     {
         if (string.IsNullOrWhiteSpace(filter)) return;
@@ -291,8 +303,6 @@ public static class Platform
         {
             for (int i = 0; i < parts.Length; i += 2)
             {
-                // Pin strings in memory so the garbage collector doesn't move them 
-                // while the native COM dialog is reading the pointers.
                 var nameHandle = GCHandle.Alloc(parts[i], GCHandleType.Pinned);
                 var specHandle = GCHandle.Alloc(parts[i + 1], GCHandleType.Pinned);
 
@@ -326,8 +336,6 @@ public static class Platform
         if (pathPtr.Value == null) return null;
 
         string path = new string(pathPtr.Value);
-
-        // Free the native memory allocated by the shell
         PInvoke.CoTaskMemFree(pathPtr.Value);
 
         return path;

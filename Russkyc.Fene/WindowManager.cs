@@ -10,23 +10,23 @@ namespace Russkyc.Fene;
 /// </summary>
 public class WindowManager
 {
-    private WebViewWindow? _mainWindow;
+    private Window? _mainWindow;
     private string _baseUrl = string.Empty;
-    private readonly ConcurrentDictionary<Guid, WebViewWindow> _activeWindows = new();
+    private readonly ConcurrentDictionary<Guid, Window> _activeWindows = new();
     private static readonly Lazy<WindowManager> _shared = new(() => new WindowManager());
     public static WindowManager Shared => _shared.Value;
     
     /// <summary>
     /// Gets the primary application window, if currently initialized.
     /// </summary>
-    public WebViewWindow? MainWindow => _mainWindow;
+    public Window? MainWindow => _mainWindow;
 
     internal void Initialize(string baseUrl)
     {
         _baseUrl = baseUrl.TrimEnd('/');
     }
 
-    public void RunDesktop(WebViewWindow mainWindow, string url)
+    public void RunDesktop(Window mainWindow, string url)
     {
         mainWindow.Closed += () => 
         {
@@ -56,7 +56,7 @@ public class WindowManager
     /// Asynchronously spawns a native window. The task completes when the navigation 
     /// to the requested path is fully finished.
     /// </summary>
-    public Task<Guid> OpenAsync(string path, WebViewWindow window, bool isMainWindow = false)
+    public Task<Guid> OpenAsync(string path, Window window, bool isMainWindow = false)
     {
         var tcs = new TaskCompletionSource<Guid>();
         var windowId = Guid.NewGuid();
@@ -96,7 +96,7 @@ public class WindowManager
     /// Spawns a window and awaits its total closure, useful for the Dialog/Modal pattern.
     /// Optionally accepts an owner window to create a true, blocking Win32 modal.
     /// </summary>
-    public Task ShowDialogAsync(string path, WebViewWindow window, bool external = false, WebViewWindow? owner = null)
+    public Task ShowDialogAsync(string path, Window window, bool external = false, Window? owner = null)
     {
         var tcs = new TaskCompletionSource();
         var windowId = Guid.NewGuid();
@@ -143,7 +143,7 @@ public class WindowManager
     /// <summary>
     /// Locates an active window by its unique tracking identifier.
     /// </summary>
-    public WebViewWindow? GetWindow(Guid id) => _activeWindows.TryGetValue(id, out var window) ? window : null;
+    public Window? GetWindow(Guid id) => _activeWindows.TryGetValue(id, out var window) ? window : null;
 
     /// <summary>
     /// Closes and removes an active secondary window by its identifier.

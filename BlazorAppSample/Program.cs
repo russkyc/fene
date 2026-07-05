@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddFene();
+builder.Services.AddFeneServices();
 
 var app = builder.Build();
 
@@ -26,7 +26,7 @@ app.MapRazorComponents<App>()
 
 app.MapFeneFontsApi();
 
-var mainWindow = WebViewWindowBuilder
+var mainWindow = WindowBuilder
     .Create("Blazor App Sample")
     .WithStartPosition(WindowStartPosition.CenterScreen)
     .WithSize(800, 600)

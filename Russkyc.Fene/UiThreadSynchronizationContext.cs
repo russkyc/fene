@@ -13,14 +13,14 @@ internal sealed class UiThreadSynchronizationContext(HWND hwnd) : Synchronizatio
     {
         if (state is null) return;
         _mQueue.Add(new KeyValuePair<SendOrPostCallback, object>(d, state));
-        PInvoke.PostMessage(hwnd, WebViewWindow.WmSynchronizationcontextWorkAvailable, 0, 0);
+        PInvoke.PostMessage(hwnd, Window.WmSynchronizationcontextWorkAvailable, 0, 0);
     }
 
     public override void Send(SendOrPostCallback d, object? state)
     {
         if (state is null) return;
         _mQueue.Add(new KeyValuePair<SendOrPostCallback, object>(d, state));
-        PInvoke.SendMessage(hwnd, WebViewWindow.WmSynchronizationcontextWorkAvailable, 0, 0);
+        PInvoke.SendMessage(hwnd, Window.WmSynchronizationcontextWorkAvailable, 0, 0);
     }
 
     public void RunAvailableWorkOnCurrentThread()

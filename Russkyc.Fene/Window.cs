@@ -17,7 +17,7 @@ namespace Russkyc.Fene;
 /// <summary>
 /// Represents a native window hosting a WebView2 control.
 /// </summary>
-public class WebViewWindow(
+public class Window(
     string title = "WebView Window",
     int? width = null,
     int? height = null,
@@ -30,10 +30,10 @@ public class WebViewWindow(
     private const uint WmNcCalcSize = 0x0083;
     private const uint WmNcHitTest = 0x0084;
 
-    private static readonly HWND HWND_TOPMOST = new(-1);
-    private static readonly HWND HWND_NOTOPMOST = new(-2);
+    private static readonly HWND HwndTopmost = new(-1);
+    private static readonly HWND HwndNotopmost = new(-2);
 
-    private static readonly ConcurrentDictionary<HWND, WebViewWindow> WindowMap = new();
+    private static readonly ConcurrentDictionary<HWND, Window> WindowMap = new();
 
     private HWND _hwnd;
     private HWND _ownerHwnd;
@@ -43,20 +43,20 @@ public class WebViewWindow(
 
     // Internal Win32 Structs mapped specifically to avoid CsWin32 generation requirements
     [StructLayout(LayoutKind.Sequential)]
-    private struct WIN32_POINT
+    private struct Win32Point
     {
         public int X;
         public int Y;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct MINMAXINFO
+    private struct Minmaxinfo
     {
-        public WIN32_POINT ptReserved;
-        public WIN32_POINT ptMaxSize;
-        public WIN32_POINT ptMaxPosition;
-        public WIN32_POINT ptMinTrackSize;
-        public WIN32_POINT ptMaxTrackSize;
+        public Win32Point ptReserved;
+        public Win32Point ptMaxSize;
+        public Win32Point ptMaxPosition;
+        public Win32Point ptMinTrackSize;
+        public Win32Point ptMaxTrackSize;
     }
 
     private struct HostMapping
@@ -69,7 +69,7 @@ public class WebViewWindow(
     private bool _isClosingApproved;
     private readonly List<HostMapping> _mappings = new();
 
-    public WindowStartPosition StartPosition { get; set; } = WindowStartPosition.OSDefault;
+    public WindowStartPosition StartPosition { get; set; } = WindowStartPosition.OsDefault;
     public Color BackgroundColor { get; set; } = Color.Transparent;
     public bool EnableDarkMode { get; set; } = false;
     public string? IconPath { get; set; } = null;
@@ -182,7 +182,7 @@ public class WebViewWindow(
             return tcs.Task;
         }
 
-        _uiThreadSyncCtx.Post(async _ =>
+        _uiThreadSyncCtx.Post(async void (_) =>
         {
             try
             {
@@ -216,7 +216,7 @@ public class WebViewWindow(
     {
         var tcs = new TaskCompletionSource<List<Cookie>>();
 
-        EnqueueWork(async () =>
+        EnqueueWork(async void () =>
         {
             try
             {
@@ -296,7 +296,7 @@ public class WebViewWindow(
         };
     }
 
-    internal unsafe void ShowAndRun(string startUrl, WebViewWindow? owner = null)
+    internal unsafe void ShowAndRun(string startUrl, Window? owner = null)
     {
         var perMonitorV2 = new DPI_AWARENESS_CONTEXT((void*)-4);
         PInvoke.SetProcessDpiAwarenessContext(perMonitorV2);
@@ -522,7 +522,7 @@ public class WebViewWindow(
     private void ApplyTopMostState()
     {
         var placementFlags = SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE;
-        var insertAfterTarget = _isTopMost ? HWND_TOPMOST : HWND_NOTOPMOST;
+        var insertAfterTarget = _isTopMost ? HwndTopmost : HwndNotopmost;
 
         PInvoke.SetWindowPos(_hwnd, insertAfterTarget, 0, 0, 0, 0, placementFlags);
     }
@@ -581,7 +581,6 @@ public class WebViewWindow(
                     if (hitResult.Value == 1) // 1 == HTCLIENT (Mouse is inside the app workspace)
                     {
                         // Unpack screen space mouse coordinates
-                        int x = unchecked((short)(uint)lParam.Value);
                         int y = unchecked((short)((uint)lParam.Value >> 16));
 
                         // Convert to local window coordinates
@@ -608,7 +607,7 @@ public class WebViewWindow(
                 {
                     unsafe
                     {
-                        var mmi = (MINMAXINFO*)lParam.Value;
+                        var mmi = (Minmaxinfo*)lParam.Value;
                         if (MinWidth.HasValue) mmi->ptMinTrackSize.X = MinWidth.Value;
                         if (MinHeight.HasValue) mmi->ptMinTrackSize.Y = MinHeight.Value;
                     }
