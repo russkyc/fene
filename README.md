@@ -30,7 +30,7 @@ var window = WindowBuilder
     .MapVirtualHost("app.local", Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"))
     .Build();
 
-windowManager.RunDesktop(window, "[http://app.local/index.html](http://app.local/index.html)");
+windowManager.RunDesktop(window, "http://app.local/index.html");
 
 ```
 
@@ -172,7 +172,7 @@ var localMappedWindow = WindowBuilder.Create("Local Asset Viewer")
     .MapVirtualHost("app.internal.local", "wwwroot", HostResourceAccessKind.Allow)
     .Build();
 
-await windowManager.OpenAsync("[https://app.internal.local/index.html](https://app.internal.local/index.html)", localMappedWindow);
+await windowManager.OpenAsync("https://app.internal.local/index.html", localMappedWindow);
 
 ```
 
@@ -286,10 +286,10 @@ public async Task ExecutionLoginSequenceAsync()
     loginDialog.UserDataFolder = primaryFrame.UserDataFolder; // Shared isolated profile context
 
     // Blocks execution clean until the target window triggers its Win32 close events
-    await _windowManager.ShowDialogAsync("[https://accounts.google.com/signin](https://accounts.google.com/signin)", loginDialog, external: true, owner: primaryFrame);
+    await _windowManager.ShowDialogAsync("https://accounts.google.com/signin", loginDialog, external: true, owner: primaryFrame);
 
     // Primary window instantly pulls tokens stored by the dialog window. Active focus is returned cleanly to primaryFrame.
-    var postAuthCookies = await primaryFrame.GetCookiesAsync("[https://google.com](https://google.com)");
+    var postAuthCookies = await primaryFrame.GetCookiesAsync("https://google.com");
     Console.WriteLine($"Fetched structural tokens: {postAuthCookies.Count}");
 }
 
