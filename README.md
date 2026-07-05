@@ -1,8 +1,8 @@
 ﻿# Fene - A Slim WebView2 Desktop Wrapper for .NET 10
 
-> [!IMPORTANT]  
-> Fene is designed to be a slim webview2 wrapper, and is not designed nor targeted to be cross-platform.
-> This was purely an exploration of creating a desktop wrapper around blazor without using WPF, WinForms, or MAUI, or other frameworks with webview capabilities.
+Fene serves as a specialized, ultra-lean alternative for scenarios where you only need a raw Windows container. Initially explored to be used to build lightweight Windows desktop web applications without standard framework overhead. By building directly on top of native Win32 bindings via CsWin32, Fene minimizes layout overhead and footprint.
+
+> [!IMPORTANT]
 > While the api covers a lot of common scenarios, it might not cover all of the use cases you might have. If you need a more robust solution, consider using a more established framework.
 
 ## Quick Start & Bootstrapping
