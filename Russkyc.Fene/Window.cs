@@ -24,7 +24,7 @@ public class Window(
     int? minWidth = null,
     int? minHeight = null)
 {
-    public const uint WmSynchronizationcontextWorkAvailable = PInvoke.WM_USER + 1;
+    public const uint WmSynchronizationContextWorkAvailable = PInvoke.WM_USER + 1;
     public const uint WmProcessWorkQueue = PInvoke.WM_USER + 2;
     private const uint WmGetMinMaxInfo = 0x0024; // Native Win32 constant for window sizing constraints
     private const uint WmNcCalcSize = 0x0083;
@@ -631,7 +631,7 @@ public class Window(
                 if (_controller != null) _controller.Bounds = new Rectangle(0, 0, windowWidth, windowHeight);
                 break;
 
-            case WmSynchronizationcontextWorkAvailable:
+            case WmSynchronizationContextWorkAvailable:
                 _uiThreadSyncCtx?.RunAvailableWorkOnCurrentThread();
                 break;
 
