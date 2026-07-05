@@ -1,5 +1,8 @@
 ﻿## Changelog
 
+### 2.0.0
+- Changed API Naming to be more concise
+
 ### 1.1.0
 - Add support for window closing interception
 - Add support for borderless draggable regions
