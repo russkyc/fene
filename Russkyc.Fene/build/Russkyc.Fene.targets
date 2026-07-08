@@ -11,27 +11,27 @@
         <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
     </PropertyGroup>
 
-    <Target Name="ScrubWebView2DesktopFrameworks" BeforeTargets="ResolveAssemblyReferences;ResolveReferences;CoreCompile">
+    <!-- Fix removal of webview2 desktop framework references -->
+    <Target Name="ScrubWebView2DesktopFrameworks" AfterTargets="ResolvePackageAssets" BeforeTargets="ResolveAssemblyReferences;ResolveReferences;CoreCompile">
         <ItemGroup>
-            <Reference Remove="Microsoft.Web.WebView2.Wpf" />
-            <Reference Remove="Microsoft.Web.WebView2.WinForms" />
+            <Reference Remove="@(Reference->WithMetadataValue('FileName', 'Microsoft.Web.WebView2.Wpf'))" />
+            <Reference Remove="@(Reference->WithMetadataValue('FileName', 'Microsoft.Web.WebView2.WinForms'))" />
 
-            <ReferencePath Remove="@(ReferencePath)"
-                           Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf' Or '%(Filename)' == 'Microsoft.Web.WebView2.WinForms'" />
+            <ReferencePath Remove="@(ReferencePath->WithMetadataValue('FileName', 'Microsoft.Web.WebView2.Wpf'))" />
+            <ReferencePath Remove="@(ReferencePath->WithMetadataValue('FileName', 'Microsoft.Web.WebView2.WinForms'))" />
 
-            <ResolvedCompileFileDefinitions Remove="@(ResolvedCompileFileDefinitions)"
-                                            Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf' Or '%(Filename)' == 'Microsoft.Web.WebView2.WinForms'" />
+            <ResolvedCompileFileDefinitions Remove="@(ResolvedCompileFileDefinitions->WithMetadataValue('FileName', 'Microsoft.Web.WebView2.Wpf'))" />
+            <ResolvedCompileFileDefinitions Remove="@(ResolvedCompileFileDefinitions->WithMetadataValue('FileName', 'Microsoft.Web.WebView2.WinForms'))" />
+
+            <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems->WithMetadataValue('FileName', 'Microsoft.Web.WebView2.Wpf'))" />
+            <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems->WithMetadataValue('FileName', 'Microsoft.Web.WebView2.WinForms'))" />
         </ItemGroup>
     </Target>
 
     <Target Name="FenePublishScrubber" BeforeTargets="_CopyFilesToPublishDirectory">
         <ItemGroup>
-            <!-- 1. Force remove the duplicate WebView2Loader from the root publish layout -->
-            <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-                                   Condition="'%(ResolvedFileToPublish.Filename)' == 'WebView2Loader'" />
-            <!-- 2. Clean out all leaky WebView2 XML documentation files -->
-            <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-                                   Condition="'%(ResolvedFileToPublish.Extension)' == '.xml' And (String('%(ResolvedFileToPublish.Filename)').StartsWith('Microsoft.Web.WebView2'))" />
+            <ResolvedFileToPublish Remove="@(ResolvedFileToPublish->WithMetadataValue('FileName', 'WebView2Loader'))" />
+            <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.xml' And $(([System.String]::new('%(ResolvedFileToPublish.Filename)').StartsWith('Microsoft.Web.WebView2')))" />
         </ItemGroup>
     </Target>
 </Project>

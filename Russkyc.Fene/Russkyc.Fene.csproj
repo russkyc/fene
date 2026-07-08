@@ -16,7 +16,7 @@
         <RepositoryUrl>https://github.com/russkyc/fene</RepositoryUrl>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>Russkyc.Fene</PackageId>
-        <Version>2.0.0</Version>
+        <Version>2.0.1</Version>
         <PackageIcon>icon.png</PackageIcon>
     </PropertyGroup>
     
@@ -51,6 +51,5 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
-
 
 </Project>
