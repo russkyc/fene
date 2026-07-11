@@ -15,7 +15,7 @@ public class WindowManager
     private readonly ConcurrentDictionary<Guid, Window> _activeWindows = new();
     private static readonly Lazy<WindowManager> _shared = new(() => new WindowManager());
     public static WindowManager Shared => _shared.Value;
-    
+
     /// <summary>
     /// Gets the primary application window, if currently initialized.
     /// </summary>
@@ -26,24 +26,27 @@ public class WindowManager
         _baseUrl = baseUrl.TrimEnd('/');
     }
 
+    /// <summary>
+    /// Run the main entry window
+    /// </summary>
     public void RunDesktop(Window mainWindow, string url)
     {
-        mainWindow.Closed += () => 
-        {
-            Environment.Exit(0);
-        };
+        // Fix: Cache the root reference so WindowManager.Shared.MainWindow isn't null!
+        _mainWindow = mainWindow;
 
-        // Fix: If the entry thread isn't STA, spawn an isolated safe STA context
+        mainWindow.Closed += () => Environment.Exit(0);
+
+        // If the entry thread isn't STA, spawn an isolated safe STA context
         if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
         {
-            var uiThread = new Thread(() =>
+            var uiThread = new Thread(() => mainWindow.ShowAndRun(url))
             {
-                mainWindow.ShowAndRun(url);
-            }) { IsBackground = false };
+                IsBackground = false
+            };
 
             uiThread.SetApartmentState(ApartmentState.STA);
             uiThread.Start();
-            uiThread.Join(); // Blocks entry thread nicely until native UI finishes
+            uiThread.Join();
         }
         else
         {
@@ -51,7 +54,7 @@ public class WindowManager
             Thread.Sleep(Timeout.Infinite);
         }
     }
-    
+
     /// <summary>
     /// Asynchronously spawns a native window. The task completes when the navigation 
     /// to the requested path is fully finished.
