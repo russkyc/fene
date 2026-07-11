@@ -19,6 +19,17 @@
 <Routes @rendermode="InteractiveServer"/>
 <ReconnectModal/>
 <script src="@Assets["_framework/blazor.web.js"]"></script>
+<script>
+    window.themeFunctions = {
+        getTheme: () => {
+            return document.documentElement.getAttribute('data-bs-theme') || 'light';
+        },
+        setTheme: (theme) => {
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        }
+    };
+</script>
+
 </body>
 
 </html>

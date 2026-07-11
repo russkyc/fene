@@ -58,6 +58,8 @@ SetForegroundWindow
 EnableWindow
 GetWindowRect
 GetSystemMetrics
+SetClassLong
+RedrawWindow
 
 IFileDialog
 IFileOpenDialog

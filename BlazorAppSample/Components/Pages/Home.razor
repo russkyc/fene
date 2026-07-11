@@ -3,14 +3,44 @@
 @using Russkyc.Fene
 
 @inject WindowManager WindowManager
+@inject IJSRuntime Js
 
 <PageTitle>Fene Platform Demos</PageTitle>
 
 <div class="container pb-4">
     <h1 class="mb-4">Native Win32 Utilities</h1>
-    <p class="lead mb-4">Zero-dependency, native Windows dialogs triggered directly from Blazor.</p>
+    <p class="lead mb-4">Zero-dependency, native dialog apis triggered directly from Blazor.</p>
 
     <div class="row g-4">
+        
+        <!-- Theme Demo -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Dark Mode</h5>
+                    <p class="card-text text-muted small">Toggle dark mode for the application.</p>
+                    <button class="btn btn-primary" @onclick="ToggleDarkMode">Toggle Dark Mode</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save File Demo -->
+        <div class="col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Save File</h5>
+                    <p class="card-text text-muted small">Triggers the native <code>IFileSaveDialog</code> to request a destination path.</p>
+                    <button class="btn btn-primary" @onclick="PickSaveFile">Save File</button>
+                    
+                    @if (!string.IsNullOrEmpty(_saveFilePath))
+                    {
+                        <div class="alert alert-warning mt-3 mb-0 text-truncate" title="@_saveFilePath">
+                            <strong>Destination:</strong> @_saveFilePath
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
         
         <!-- Open Single File Demo -->
         <div class="col-md-6">
@@ -123,12 +153,34 @@
 </div>
 
 @code {
+    private bool _darkMode;
     private string? _singleFilePath;
     private string[]? _multiFilePaths;
     private string? _saveFilePath;
     private string? _folderPath;
     private Dictionary<string, string>? _fonts;
-
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Read current theme state on startup
+            var currentTheme = await Js.InvokeAsync<string>("themeFunctions.getTheme");
+            _darkMode = currentTheme == "dark";
+            WindowManager.MainWindow?.EnableDarkMode = _darkMode;
+            WindowManager.MainWindow?.BackgroundColor = _darkMode ? System.Drawing.Color.FromArgb(20, 20, 20) : System.Drawing.Color.White;
+            StateHasChanged();
+        }
+    }
+    private async Task ToggleDarkMode()
+    {
+        _darkMode = !_darkMode;
+        var newTheme = _darkMode ? "dark" : "light";
+        await Js.InvokeVoidAsync("themeFunctions.setTheme", newTheme);
+        WindowManager.MainWindow?.EnableDarkMode = _darkMode;
+        WindowManager.MainWindow?.BackgroundColor = _darkMode ? System.Drawing.Color.FromArgb(20, 20, 20) : System.Drawing.Color.White;
+    }
+    
     private void PickSingleFile()
     {
         _singleFilePath = Platform.ShowOpenFileDialog(

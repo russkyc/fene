@@ -65,13 +65,11 @@ public class Window(
         public string FolderPath { get; set; }
         public HostResourceAccessKind AccessKind { get; set; }
     }
-    
+
     private bool _isClosingApproved;
     private readonly List<HostMapping> _mappings = new();
 
     public WindowStartPosition StartPosition { get; set; } = WindowStartPosition.OsDefault;
-    public Color BackgroundColor { get; set; } = Color.Transparent;
-    public bool EnableDarkMode { get; set; } = false;
     public string? IconPath { get; set; } = null;
     public string? UserDataFolder { get; set; } = null;
     public bool ShowOnlyAfterLoad { get; set; } = false;
@@ -81,6 +79,103 @@ public class Window(
     public int? Height { get; set; } = height;
     public int? MinWidth { get; set; } = minWidth;
     public int? MinHeight { get; set; } = minHeight;
+
+    public unsafe Color BackgroundColor
+    {
+        get;
+        set
+        {
+            field = value;
+
+            if (!_hwnd.IsNull)
+            {
+                EnqueueWork(() =>
+                {
+                    // 1. Update WebView2 controller background surface safely
+                    if (_controller != null)
+                    {
+                        _controller.DefaultBackgroundColor = field;
+                    }
+
+                    // 2. Change the Win32 window background brush class property safely
+                    var winColor =
+                        new COLORREF(
+                            (uint)((field.B << 16) | (field.G << 8) | field.R));
+                    var newBrush = PInvoke.CreateSolidBrush(winColor);
+
+                    nint oldBrushPtr = IntPtr.Zero;
+
+                    if (Environment.Is64BitProcess)
+                    {
+                        // 64-bit: Pass (nint)newBrush.Value to cast the underlying void* pointer to nint
+                        oldBrushPtr = Native.SetClassLongPtr64(_hwnd, GET_CLASS_LONG_INDEX.GCLP_HBRBACKGROUND,
+                            (nint)newBrush.Value);
+                    }
+                    else
+                    {
+                        // 32-bit: Explicit cast the returned uint up to an architecture nint target representation
+                        oldBrushPtr = (nint)PInvoke.SetClassLong(_hwnd, GET_CLASS_LONG_INDEX.GCLP_HBRBACKGROUND,
+                            (int)newBrush.Value);
+                    }
+
+                    if (oldBrushPtr != IntPtr.Zero)
+                    {
+                        PInvoke.DeleteObject(new HGDIOBJ(oldBrushPtr)); // Clean up previous brush memory
+                    }
+
+                    // Force the window frame to redraw instantly
+                    PInvoke.RedrawWindow(_hwnd, null, HRGN.Null,
+                        REDRAW_WINDOW_FLAGS.RDW_ERASE | REDRAW_WINDOW_FLAGS.RDW_INVALIDATE |
+                        REDRAW_WINDOW_FLAGS.RDW_UPDATENOW);
+                });
+            }
+        }
+    } = Color.Transparent;
+
+    public bool EnableDarkMode
+    {
+        get;
+        set
+        {
+            field = value;
+
+            if (!_hwnd.IsNull)
+            {
+                // Marshal execution safely to the Win32 UI Thread loop
+                EnqueueWork(() =>
+                {
+                    unsafe
+                    {
+                        // 1. Update the native Win32 Desktop Window Manager (DWM) frame theme
+                        int useDarkMode = field ? 1 : 0;
+                        HRESULT hr = PInvoke.DwmSetWindowAttribute(_hwnd,
+                            DWMWINDOWATTRIBUTE.DWMWA_USE_IMMERSIVE_DARK_MODE,
+                            &useDarkMode, sizeof(int));
+
+                        if (hr.Failed)
+                        {
+                            int fallbackAttribute = 19; // Handle older Windows 10 versions (1809–1909)
+                            PInvoke.DwmSetWindowAttribute(_hwnd, (DWMWINDOWATTRIBUTE)fallbackAttribute, &useDarkMode,
+                                sizeof(int));
+                        }
+                    }
+
+                    // 2. Inform the underlying browser profile engine to map dark media themes safely on the UI thread
+                    if (_controller?.CoreWebView2?.Profile != null)
+                    {
+                        _controller.CoreWebView2.Profile.PreferredColorScheme = field
+                            ? CoreWebView2PreferredColorScheme.Dark
+                            : CoreWebView2PreferredColorScheme.Light;
+                    }
+
+                    // Trigger a redraw of the non-client title bar region
+                    PInvoke.SetWindowPos(_hwnd, HWND.Null, 0, 0, 0, 0,
+                        SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                        SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED);
+                });
+            }
+        }
+    }
 
     /// <summary>
     /// Gets or sets the custom User-Agent string for this window.
@@ -416,14 +511,7 @@ public class Window(
 
         if (EnableDarkMode)
         {
-            int useDarkMode = 1;
-            HRESULT hr = PInvoke.DwmSetWindowAttribute(_hwnd, DWMWINDOWATTRIBUTE.DWMWA_USE_IMMERSIVE_DARK_MODE,
-                &useDarkMode, sizeof(int));
-            if (hr.Failed)
-            {
-                int fallbackAttribute = 19;
-                PInvoke.DwmSetWindowAttribute(_hwnd, (DWMWINDOWATTRIBUTE)fallbackAttribute, &useDarkMode, sizeof(int));
-            }
+            EnableDarkMode = true;
         }
 
         if (!ShowOnlyAfterLoad)
@@ -543,7 +631,7 @@ public class Window(
                     unsafe
                     {
                         RECT* rgrc = (RECT*)lParam.Value;
-                        
+
                         // Save the absolute top position of the window box before the OS modifies it
                         var originalTop = rgrc[0].top;
 
@@ -555,7 +643,7 @@ public class Window(
                         {
                             // When maximized, Windows pushes window borders off-screen by about 8px.
                             // We adjust the top back down slightly so your Blazor title bar isn't cut off.
-                            int framePadding = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYFRAME) + 
+                            int framePadding = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYFRAME) +
                                                PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXPADDEDBORDER);
                             rgrc[0].top = originalTop + framePadding;
                         }
@@ -568,15 +656,16 @@ public class Window(
                         return lresult;
                     }
                 }
+
                 break;
-                
+
             case WmNcHitTest:
                 if (IsBorderless)
                 {
                     // Let the native Win32 window manager evaluate the standard transparent borders first.
                     // This seamlessly handles left, right, bottom, and all diagonal corner resizes!
                     var hitResult = PInvoke.DefWindowProc(_hwnd, msg, wParam, lParam);
-                    
+
                     // Since our client area now goes to the very top, we must manually handle the top resize edge.
                     if (hitResult.Value == 1) // 1 == HTCLIENT (Mouse is inside the app workspace)
                     {
@@ -597,9 +686,10 @@ public class Window(
 
                         return (LRESULT)1; // 1 == HTCLIENT (Pass input normally to WebView2 / app-region: drag)
                     }
-                    
+
                     return hitResult;
                 }
+
                 break;
 
             case WmGetMinMaxInfo:
@@ -719,7 +809,7 @@ public class Window(
                 _controller.CoreWebView2.Profile.PreferredColorScheme = CoreWebView2PreferredColorScheme.Dark;
 
             var s = _controller.CoreWebView2.Settings;
-            
+
             // Natively pass HTML app-region attributes straight to Win32 hit-testing mechanics
             try
             {
@@ -729,7 +819,7 @@ public class Window(
             {
                 // Fallback for systems running older WebView2 runtimes where the API isn't present
             }
-            
+
             s.AreDevToolsEnabled = Options.AreDevToolsEnabled;
             s.IsScriptEnabled = Options.IsScriptEnabled;
             s.IsWebMessageEnabled = Options.IsWebMessageEnabled;
@@ -833,7 +923,7 @@ public class Window(
         {
             // Execute the consumer's async check (e.g., showing a web dialog or checking unsaved state)
             bool shouldClose = await ClosingAsync();
-            
+
             if (shouldClose)
             {
                 _isClosingApproved = true;
